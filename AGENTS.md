@@ -12,5 +12,6 @@ Assume contributors are agents that copy the nearest example. Prefer architectur
 | Agents cannot set reporting tier | `ingest_api` forces `agent_derived` |
 | Embedding dim must match config | `embed_articles` raises on mismatch |
 | Prefer smallest change | pstack `laziness-protocol` |
+| Commit only as sacha-l | Email `23283108+sacha-l@users.noreply.github.com`. Never `sacha@users.noreply.github.com` (that address is github.com/sacha). `git config core.hooksPath .githooks` and `scripts/check_commit_email.sh` |
 
 pstack skills referenced: `architect`, `correct`, `principle-make-operations-idempotent`, `principle-laziness-protocol`, `principle-guard-the-context-window`.

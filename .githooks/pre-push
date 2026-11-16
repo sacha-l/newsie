@@ -1,0 +1,5 @@
+#!/bin/sh
+# Block a push whose history GitHub would attribute to a different account.
+set -eu
+root=$(git rev-parse --show-toplevel)
+exec "$root/scripts/check_commit_email.sh" --history
