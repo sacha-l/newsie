@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from newsie.cli import build_demo_pipeline, build_live_pipeline
 from newsie.hitl import HitlError, approve_draft, reject_draft
+from newsie.web.presentation import build_digest_view, build_sources_only_view
 from newsie.web.session import DemoSession, registry
 
 WEB_DIR = Path(__file__).resolve().parent
@@ -33,12 +34,18 @@ def _ctx(request: Request, sess: DemoSession, **extra: Any) -> dict[str, Any]:
     if sess.publication_id:
         pub = sess.store.publications.get(sess.publication_id)
     stories = sess.store.list_stories()
+    edition = (
+        build_digest_view(sess.store, draft)
+        if draft is not None
+        else build_sources_only_view(sess.store)
+    )
     return {
         "request": request,
         "session_id": sess.id,
         "status": sess.last_status,
         "messages": sess.messages,
         "draft": draft,
+        "edition": edition,
         "publication": pub,
         "story_count": len(stories),
         "article_count": len(sess.store.list_articles()),

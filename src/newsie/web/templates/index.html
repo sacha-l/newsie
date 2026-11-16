@@ -3,77 +3,176 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Newsie — Berlin & Germany political digest</title>
+  <title>Newsie — Daily digest</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;650&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,450;9..144,600;9..144,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
-<body>
-  <main class="wrap">
-    <header class="hero">
-      <h1 class="brand">Newsie</h1>
-      <p class="tagline">Unbiased English digests of German &amp; Berlin political news — sample offline pipeline with HITL controls.</p>
+<body class="paper">
+  <div class="sheet">
+    <header class="masthead">
+      <div class="masthead-rule"></div>
+      <p class="kicker">{{ edition.edition_label }}</p>
+      <h1 class="masthead-title">Newsie</h1>
+      <p class="masthead-deck">English digest of German &amp; Berlin political news — read like an edition, approve like an editor.</p>
       {% if sample_banner %}
-      <div class="banner">Sample data · fixture sources · no live API keys required</div>
+      <p class="sample-chip">Sample edition · fixture feeds</p>
       {% endif %}
+      <div class="masthead-rule heavy"></div>
     </header>
 
-    <section class="panel">
-      <div class="actions">
-        <form method="post" action="/run">
-          <input type="hidden" name="mode" value="demo" />
-          <button class="ghost" type="submit">Run sample</button>
-        </form>
-        <form method="post" action="/run">
-          <input type="hidden" name="mode" value="live" />
-          <button class="primary" type="submit">Run live RSS</button>
-        </form>
-        <form method="post" action="/approve">
-          <button class="ghost" type="submit" {% if not draft or draft.validation_status != 'ok' or publication %}disabled{% endif %}>Approve</button>
-        </form>
-        <form method="post" action="/reject">
-          <input type="hidden" name="reason" value="owner_reject" />
-          <button class="danger" type="submit" {% if not draft %}disabled{% endif %}>Reject</button>
-        </form>
-      </div>
+    {% if messages %}
+    <ul class="flash">
+      {% for m in messages %}
+      <li>{{ m }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
 
-      <div class="meta">
-        <span>Status <strong>{{ status }}</strong></span>
-        <span>Articles <strong>{{ article_count }}</strong></span>
-        <span>Stories <strong>{{ story_count }}</strong></span>
-        {% if draft %}<span>Validation <strong>{{ draft.validation_status }}</strong></span>{% endif %}
-      </div>
+    <div class="spread">
+      <aside class="rail" aria-label="Sources today">
+        <h2 class="rail-title">Sources today</h2>
+        <p class="rail-lede">Volume in this edition — trending outlets marked.</p>
+        <ol class="source-trend">
+          {% for s in edition.trending %}
+          <li class="source-row{% if s.trending %} is-hot{% endif %}">
+            <div class="source-meta">
+              <span class="source-name">{{ s.name }}</span>
+              {% if s.trending %}<span class="badge-hot">Trending</span>{% endif %}
+              <span class="source-count">{{ s.article_count }} {% if s.article_count == 1 %}story{% else %}stories{% endif %}</span>
+            </div>
+            <div class="bar-track" aria-hidden="true">
+              <span class="bar-fill" style="width: {{ s.share_pct }}%"></span>
+            </div>
+            <details class="source-tags">
+              <summary>Outlet details</summary>
+              <p class="tag-line">
+                {% if s.spectrum_tags %}
+                {% for tag in s.spectrum_tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+                {% else %}
+                <span class="tag muted">untagged</span>
+                {% endif %}
+                <span class="tag muted">reliability {{ "%.2f"|format(s.reliability) }}</span>
+              </p>
+            </details>
+          </li>
+          {% endfor %}
+        </ol>
+        <p class="rail-foot">Articles {{ article_count }} · clusters {{ story_count }} · status {{ status }}</p>
+      </aside>
 
-      {% if messages %}
-      <ul class="msgs">
-        {% for m in messages %}
-        <li>{{ m }}</li>
+      <div class="folio">
+        {% if draft and edition.sections %}
+        {% for section in edition.sections %}
+        <section class="category-block">
+          <h2 class="category-head">{{ section.title }}</h2>
+          {% for story in section.stories %}
+          <article class="story">
+            <h3 class="story-head">{{ story.headline }}</h3>
+            <ul class="story-briefs">
+              {% for item in story.items %}
+              <li class="brief">
+                <a class="brief-title" href="{{ item.url }}" rel="noopener noreferrer">{{ item.title }}</a>
+                <span class="brief-attr">{{ item.source_name }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+            <details class="story-details">
+              <summary>Cluster metadata</summary>
+              <dl class="mini-meta">
+                <dt>Corroboration</dt>
+                <dd>{{ "%.2f"|format(story.corroboration) }}</dd>
+                <dt>Sources in cluster</dt>
+                <dd>
+                  {% for item in story.items %}
+                  <span class="tag">{{ item.source_name }}{% if item.spectrum_tags %} ({% for t in item.spectrum_tags %}{{ t }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</span>
+                  {% endfor %}
+                </dd>
+              </dl>
+            </details>
+          </article>
+          {% endfor %}
+        </section>
         {% endfor %}
-      </ul>
-      {% endif %}
 
-      {% if draft and draft.english_render_md %}
-      <article class="digest">{{ draft.english_render_md }}</article>
-      {% elif not draft %}
-      <p class="empty">No digest yet. Hit <strong>Run digest</strong> to generate a sample Berlin/Germany brief.</p>
-      {% endif %}
+        <section class="category-block accent diverge">
+          <h2 class="category-head">How outlets differ</h2>
+          <div class="prose">{{ edition.divergence_text }}</div>
+        </section>
 
-      <form class="rate-row" method="post" action="/rate">
-        <label for="source_id">Rate source</label>
-        <select id="source_id" name="source_id">
-          <option value="tagesschau">tagesschau</option>
-          <option value="rbb">rbb</option>
-          <option value="zeit">zeit</option>
-        </select>
-        <input type="number" name="score" min="0.1" max="1.5" step="0.1" value="1.2" />
-        <button class="ghost" type="submit">Save rating</button>
-      </form>
-    </section>
+        {% if edition.events %}
+        <section class="category-block calendar">
+          <h2 class="category-head">On the calendar</h2>
+          <ul class="events">
+            {% for e in edition.events %}
+            <li>
+              <strong>{{ e.title }}</strong>
+              {% if e.where %}<span class="event-where"> — {{ e.where }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+        {% elif not draft %}
+        <p class="empty-edition">No edition yet. Use <strong>Run sample</strong> or <strong>Run live RSS</strong> from the editorial desk below.</p>
+        {% endif %}
 
-    <footer>
-      Phase 1 demo UI · core pipeline from the newsie CLI · Railway/Supabase/Telegram remain production targets.
+        <details class="desk-block">
+          <summary class="desk-summary">Editorial desk — run, approve, rate</summary>
+          <div class="desk-panel">
+            <div class="actions">
+              <form method="post" action="/run">
+                <input type="hidden" name="mode" value="demo" />
+                <button class="ghost" type="submit">Run sample</button>
+              </form>
+              <form method="post" action="/run">
+                <input type="hidden" name="mode" value="live" />
+                <button class="primary" type="submit">Run live RSS</button>
+              </form>
+              <form method="post" action="/approve">
+                <button class="ghost" type="submit" {% if not draft or draft.validation_status != 'ok' or publication %}disabled{% endif %}>Approve</button>
+              </form>
+              <form method="post" action="/reject">
+                <input type="hidden" name="reason" value="owner_reject" />
+                <button class="danger" type="submit" {% if not draft %}disabled{% endif %}>Reject</button>
+              </form>
+            </div>
+            {% if draft %}
+            <p class="desk-meta">Validation <strong>{{ draft.validation_status }}</strong>{% if publication %} · Published{% endif %}</p>
+            {% endif %}
+            <form class="rate-row" method="post" action="/rate">
+              <label for="source_id">Adjust source weight</label>
+              <select id="source_id" name="source_id">
+                {% for s in edition.trending %}
+                <option value="{{ s.source_id }}">{{ s.name }}</option>
+                {% endfor %}
+              </select>
+              <input type="number" name="score" min="0.1" max="1.5" step="0.1" value="1.2" />
+              <button class="ghost" type="submit">Save</button>
+            </form>
+          </div>
+        </details>
+
+        {% if draft and edition.perspectives %}
+        <details class="desk-block">
+          <summary class="desk-summary">Party perspectives (secondary analysis)</summary>
+          <div class="perspectives">
+            {% for p in edition.perspectives %}
+            <article class="perspective">
+              <h3>{{ p.party_label }}</h3>
+              <p>{{ p.summary }}</p>
+            </article>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+
+    <footer class="colophon">
+      Phase 2 reader UI · production path remains Railway workers, Supabase, Telegram HITL.
     </footer>
-  </main>
+  </div>
 </body>
 </html>

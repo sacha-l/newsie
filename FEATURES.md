@@ -17,6 +17,7 @@ Update this file when something ships or when you want to capture a new idea (no
 | HITL approve path (no publish without approval) | shipped | `hitl.py` |
 | Citation validation hook | shipped | `citations.py` |
 | FastAPI web UI (fixture digest) | shipped | `uv run newsie web` |
+| Newspaper-style digest reader (categories, trending sources rail) | shipped | `src/newsie/web/presentation.py` |
 | Live RSS ingest + HTTP adapter | shipped | `adapters/rss.py`, `http_adapter.py` |
 | SQL persistence (Phase 2) | shipped | `sql_store.py`, `migrations/001_init.sql` |
 | Agent ingest API (`agent_derived` tier enforced) | shipped | `ingest_api.py` |
@@ -45,6 +46,12 @@ Update this file when something ships or when you want to capture a new idea (no
   - Validate feed URL before save (dry-run ingest).  
   - Optional import/export of `seed_sources.yaml`.  
 - **Depends on:** stable M1 ingest + DB registry (partially in repo via SQL + seed file).
+
+### Daily digest paper UX (categories + trending sources)
+
+- **Status:** shipped (initial pass)  
+- **Goal:** Read the edition by category; spectrum/source tags live in details; sources rail shows trending volume.  
+- **Follow-ups:** richer category taxonomy, social/Grok lane beside RSS trending.
 
 ### (add next)
 
