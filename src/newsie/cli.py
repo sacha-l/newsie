@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -13,7 +15,9 @@ from newsie.adapters.registry import AdapterRouter
 from newsie.config import Settings, get_settings
 from newsie.guardrails import KillSwitch
 from newsie.hitl import approve_draft, reject_draft
+from newsie.llm import GrokProvider
 from newsie.pipeline import DigestPipeline, seed_demo_sources, seed_live_sources
+from newsie.sources import load_live_sources
 from newsie.store_factory import create_store
 
 
@@ -36,11 +40,13 @@ def build_live_pipeline(settings: Settings | None = None) -> tuple[DigestPipelin
     settings = settings.model_copy(update={"demo_mode": False})
     store = create_store(settings)
     seed_live_sources(store)
-    router = AdapterRouter(allow_fixture_fallback=True)
+    router = AdapterRouter(allow_fixture_fallback=False)
+    llm = GrokProvider(settings.xai_api_key, settings.grok_model) if settings.xai_api_key else None
     pipeline = DigestPipeline(
         store,
         settings,
         adapter=router,
+        llm=llm,
         kill_switch=KillSwitch(engaged=settings.kill_switch),
     )
     return pipeline, store
@@ -69,7 +75,11 @@ def cmd_demo(_: argparse.Namespace) -> int:
     pub = approve_draft(store, result.draft.id, kill_switch=pipeline.kill_switch)
     print(f"published: {pub.id} at {pub.approved_at.isoformat()}")
     store.rate_source("tagesschau", 1.2)
-    print(f"tagesschau reliability -> {store.sources['tagesschau'].reliability_score}")
+    source = store.sources["tagesschau"]
+    print(f"tagesschau owner preference -> {source.owner_preference}")
+    print(f"tagesschau reliability -> {source.reliability_score}")
+    if pub.immutable_snapshot.get("balance_text"):
+        print(pub.immutable_snapshot["balance_text"])
     return 0
 
 
@@ -120,6 +130,77 @@ def cmd_approve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_validate_sources(args: argparse.Namespace) -> int:
+    """Fetch each enabled feed and report text length, language, and truncation."""
+    from newsie.adapters.base import FetchContext
+    from newsie.adapters.http_adapter import fetch_article_page
+    from newsie.adapters.rss import RssAdapter
+
+    sources = [source for source in load_live_sources() if source.enabled]
+    if args.source:
+        sources = [source for source in sources if source.id == args.source]
+    adapter = RssAdapter()
+    ctx = FetchContext(
+        deadline=datetime.now(UTC),
+        max_articles=3,
+        lookback_hours=72,
+    )
+    failures = 0
+    for source in sources:
+        print(f"== {source.id} ({source.spectrum.value}, {source.tier.value}) ==")
+        try:
+            items = adapter.fetch(source, ctx)[:3]
+        except Exception as exc:
+            print(f"  feed error: {exc}")
+            failures += 1
+            continue
+        if not items:
+            print("  no recent entries")
+            failures += 1
+            continue
+        for item in items:
+            page = fetch_article_page(item.url, rate_limit_per_hour=source.rate_limit_per_hour)
+            if page is None:
+                text = item.content_text
+                method = "rss_summary"
+                partial = True
+            else:
+                text = str(page["text"])
+                method = str(page["method"])
+                partial = bool(page["partial"])
+            print(
+                f"  {len(text)} chars  lang={_guess_lang(text)}  "
+                f"method={method}  partial={partial}  {item.url}"
+            )
+    return 1 if failures else 0
+
+
+def _guess_lang(text: str) -> str:
+    sample = text.lower()
+    german = sum(token in sample for token in (" und ", " der ", " die ", " das "))
+    english = sum(token in sample for token in (" the ", " and ", " of "))
+    return "de" if german >= english else "en"
+
+
+def cmd_report(_args: argparse.Namespace) -> int:
+    from newsie.evals.metrics import beats_baseline, load_label_rows, score_label_rows
+
+    path = Path(__file__).resolve().parents[2] / "data" / "gold" / "label_baseline.json"
+    rows = load_label_rows(path)
+    scored = score_label_rows(rows)
+    print(f"Label file: {path}")
+    print(
+        "Constructed examples of the label rule, not the 100-sentence audit: "
+        f"evidence {scored['evidence']:.2f}, outlet-count {scored['outlet_count']:.2f}, "
+        f"evidence beats outlet-count: {beats_baseline(rows)}"
+    )
+    print(
+        "Wire-copy rate and the 30-story clustering score still need a labelled live corpus. "
+        "newsie.evals.metrics.wire_copy_rate and bcubed score a corpus when you have one."
+    )
+    return 0
+
+
 def cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -145,6 +226,19 @@ def main(argv: list[str] | None = None) -> None:
     p_approve.add_argument("--draft-id", default=None)
     p_approve.add_argument("--reject", default=None, help="Reject with reason")
     p_approve.set_defaults(func=cmd_approve)
+
+    p_check = sub.add_parser(
+        "validate-sources",
+        help="Fetch each feed, extract three articles, report length and truncation",
+    )
+    p_check.add_argument("--source", default=None, help="Check one source id")
+    p_check.set_defaults(func=cmd_validate_sources)
+
+    p_report = sub.add_parser(
+        "report",
+        help="Score the constructed label file and say which live audits are still open",
+    )
+    p_report.set_defaults(func=cmd_report)
 
     p_web = sub.add_parser("web", help="Serve web UI")
     p_web.add_argument("--host", default="127.0.0.1")

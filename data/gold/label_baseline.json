@@ -1,0 +1,26 @@
+[
+  {
+    "human": "single_origin",
+    "evidence_label": "single_origin",
+    "outlet_count": 2,
+    "note": "Two outlets, one origin. A wire copy."
+  },
+  {
+    "human": "corroborated",
+    "evidence_label": "corroborated",
+    "outlet_count": 2,
+    "note": "Two independent origins agree."
+  },
+  {
+    "human": "contested",
+    "evidence_label": "contested",
+    "outlet_count": 2,
+    "note": "One origin supports the claim and another contradicts it."
+  },
+  {
+    "human": "official_only",
+    "evidence_label": "official_only",
+    "outlet_count": 2,
+    "note": "Every supporter is an official source."
+  }
+]

@@ -16,6 +16,7 @@
       <p class="kicker">{{ edition.edition_label }}</p>
       <h1 class="masthead-title">Newsie</h1>
       <p class="masthead-deck">English digest of German &amp; Berlin political news — read like an edition, approve like an editor.</p>
+      <p class="how">Newsie collects reporting from across the spectrum, splits each article into claims, and counts independent origins rather than outlet names. A factual sentence stays in the edition only when a quoted passage from one of those articles supports it. Nothing is published until you approve it.</p>
       {% if sample_banner %}
       <p class="sample-chip">Sample edition · fixture feeds</p>
       {% endif %}
@@ -54,6 +55,7 @@
                 <span class="tag muted">untagged</span>
                 {% endif %}
                 <span class="tag muted">reliability {{ "%.2f"|format(s.reliability) }}</span>
+                {% if s.spectrum_basis %}<span class="tag muted">{{ s.spectrum_basis }}</span>{% endif %}
               </p>
             </details>
           </li>
@@ -63,38 +65,66 @@
       </aside>
 
       <div class="folio">
-        {% if draft and edition.sections %}
-        {% for section in edition.sections %}
-        <section class="category-block">
-          <h2 class="category-head">{{ section.title }}</h2>
-          {% for story in section.stories %}
-          <article class="story">
-            <h3 class="story-head">{{ story.headline }}</h3>
-            <ul class="story-briefs">
-              {% for item in story.items %}
-              <li class="brief">
-                <a class="brief-title" href="{{ item.url }}" rel="noopener noreferrer">{{ item.title }}</a>
-                <span class="brief-attr">{{ item.source_name }}</span>
-              </li>
-              {% endfor %}
-            </ul>
-            <details class="story-details">
-              <summary>Cluster metadata</summary>
-              <dl class="mini-meta">
-                <dt>Corroboration</dt>
-                <dd>{{ "%.2f"|format(story.corroboration) }}</dd>
-                <dt>Sources in cluster</dt>
-                <dd>
+        {% macro story_card(story) %}
+        <article class="flip-card{% if story.is_lead %} is-lead{% endif %}" data-flip-card aria-pressed="false">
+          <div class="flip-scene">
+            <div class="flip-inner">
+              <div class="flip-face flip-front">
+                <button type="button" class="flip-toggle" aria-pressed="false" aria-label="Flip for sources: {{ story.headline }}">
+                  <span class="card-kicker">{{ story.category }}</span>
+                  <span class="card-headline">{{ story.headline }}</span>
+                  <span class="card-dek">{{ story.dek }}</span>
+                  <span class="card-foot">
+                    <span class="outlet-count">{{ story.evidence_label }}</span>
+                    {% if story.attention_marker %}<span class="tag">{{ story.attention_marker }}</span>{% endif %}
+                    <span class="flip-cue">Flip for sources</span>
+                  </span>
+                </button>
+              </div>
+              <div class="flip-face flip-back" inert aria-hidden="true">
+                <p class="verso">verso</p>
+                <button type="button" class="flip-close" aria-pressed="false">Show headline</button>
+                <h3 class="back-head">Sources</h3>
+                <ul class="source-list">
                   {% for item in story.items %}
-                  <span class="tag">{{ item.source_name }}{% if item.spectrum_tags %} ({% for t in item.spectrum_tags %}{{ t }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</span>
+                  <li>
+                    <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.source_name }}</a>
+                    {% if item.spectrum_tags %}
+                    <span class="tag-line">
+                      {% for tag in item.spectrum_tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+                    </span>
+                    {% endif %}
+                    <span class="source-title">{{ item.title }}</span>
+                  </li>
                   {% endfor %}
-                </dd>
-              </dl>
-            </details>
-          </article>
+                </ul>
+                <h3 class="back-head">What the opinion means</h3>
+                <ul class="meaning-list">
+                  {% for note in story.meanings %}
+                  <li>{{ note.sentence }}</li>
+                  {% endfor %}
+                </ul>
+                <h3 class="back-head">How it differs</h3>
+                <p class="differ-line">{{ story.differ_line }}</p>
+              </div>
+            </div>
+          </div>
+        </article>
+        {% endmacro %}
+        {% if draft and edition.sections %}
+        <div class="broadsheet">
+          <p class="prose">{{ edition.evidence_note }}</p>
+          {% for section in edition.sections %}
+            {% for story in section.stories if story.is_lead %}
+              {{ story_card(story) }}
+            {% endfor %}
           {% endfor %}
-        </section>
-        {% endfor %}
+          {% for section in edition.sections %}
+            {% for story in section.stories if not story.is_lead %}
+              {{ story_card(story) }}
+            {% endfor %}
+          {% endfor %}
+        </div>
 
         <section class="category-block accent diverge">
           <h2 class="category-head">How outlets differ</h2>
@@ -141,6 +171,41 @@
             {% if draft %}
             <p class="desk-meta">Validation <strong>{{ draft.validation_status }}</strong>{% if publication %} · Published{% endif %}</p>
             {% endif %}
+            {% if edition.review_queue %}
+            <p class="desk-meta">Least sure stance calls</p>
+            <ul>
+              {% for item in edition.review_queue %}
+              <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            <form class="rate-row" method="post" action="/sources">
+              <label for="new_source_id">Add a source</label>
+              <input id="new_source_id" name="source_id" placeholder="id" required />
+              <input name="name" placeholder="Name" required />
+              <input name="homepage_url" placeholder="https://example.de" required />
+              <input name="feed_url" placeholder="Feed URL" />
+              <select name="spectrum">
+                <option value="left">left</option>
+                <option value="centre-left">centre-left</option>
+                <option value="centre" selected>centre</option>
+                <option value="centre-right">centre-right</option>
+                <option value="right">right</option>
+                <option value="regional">regional</option>
+                <option value="official">official</option>
+                <option value="party">party</option>
+              </select>
+              <button class="ghost" type="submit">Add source</button>
+            </form>
+            <form class="rate-row" method="post" action="/sources/disable">
+              <label for="disable_source_id">Disable a source</label>
+              <select id="disable_source_id" name="source_id">
+                {% for s in edition.trending %}
+                <option value="{{ s.source_id }}">{{ s.name }}</option>
+                {% endfor %}
+              </select>
+              <button class="danger" type="submit">Disable</button>
+            </form>
             <form class="rate-row" method="post" action="/rate">
               <label for="source_id">Adjust source weight</label>
               <select id="source_id" name="source_id">
@@ -174,5 +239,6 @@
       Phase 2 reader UI · production path remains Railway workers, Supabase, Telegram HITL.
     </footer>
   </div>
+  <script src="/static/flip.js"></script>
 </body>
 </html>

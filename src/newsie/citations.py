@@ -1,20 +1,61 @@
-"""Citation validator — claims must reference URLs present in the story cluster."""
+"""Citation validator.
+
+Every factual sentence needs a citation. The quote has to occur in the stored
+article, and the passage has to support the sentence. A URL that is merely
+somewhere in the cluster is only the first gate.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from newsie.domain import Article, DigestDraft
+from newsie.domain import Article, DigestDraft, DigestSentence
+from newsie.evidence import passage_supports
 
 
 @dataclass
 class ValidationResult:
     ok: bool
     errors: list[str]
+    sentences: list[DigestSentence] = field(default_factory=list)
+
+
+def _article_for(url: str, articles: list[Article]) -> Article | None:
+    for article in articles:
+        if url == article.url or url == article.canonical_url:
+            return article
+    return None
+
+
+def _check_sentence(
+    sentence: DigestSentence, articles: list[Article], errors: list[str]
+) -> DigestSentence:
+    if sentence.section == "note":
+        return sentence.model_copy(update={"support_verdict": "unchecked"})
+    if not sentence.citations:
+        errors.append(f"sentence has no citation: {sentence.text[:80]}")
+        return sentence.model_copy(update={"support_verdict": "unsupported"})
+    verdict = "supported"
+    for citation in sentence.citations:
+        article = _article_for(citation.url, articles)
+        if article is None:
+            errors.append(f"citation not in cluster: {citation.url}")
+            verdict = "unsupported"
+            continue
+        if citation.quote not in article.body_text():
+            errors.append(f"quote not in article: {citation.url}")
+            verdict = "unsupported"
+            continue
+        if not passage_supports(sentence.text, citation.quote):
+            errors.append(f"passage does not support sentence: {sentence.text[:80]}")
+            verdict = "unsupported"
+    return sentence.model_copy(update={"support_verdict": verdict})
 
 
 def validate_draft(draft: DigestDraft, articles: list[Article]) -> ValidationResult:
-    allowed = {a.url for a in articles} | {a.canonical_url for a in articles}
+    allowed = {article.url for article in articles} | {
+        article.canonical_url for article in articles
+    }
     errors: list[str] = []
 
     for url in draft.citations:
@@ -31,8 +72,11 @@ def validate_draft(draft: DigestDraft, articles: list[Article]) -> ValidationRes
             if url not in allowed:
                 errors.append(f"event citation not in cluster: {url}")
 
-    # Fabrication heuristic: empty citations when content exists
-    if articles and not draft.citations:
+    checked: list[DigestSentence] = []
+    if draft.sentences:
+        for sentence in draft.sentences:
+            checked.append(_check_sentence(sentence, articles, errors))
+    elif articles and not draft.citations:
         errors.append("digest has no citations")
 
-    return ValidationResult(ok=not errors, errors=errors)
+    return ValidationResult(ok=not errors, errors=errors, sentences=checked)

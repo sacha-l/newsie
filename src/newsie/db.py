@@ -15,6 +15,8 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    inspect,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -38,6 +40,10 @@ class SourceRow(Base):
     strike_count: Mapped[int] = mapped_column(Integer, default=0)
     trust_state: Mapped[str] = mapped_column(String, default="trusted")
     rate_limit_per_hour: Mapped[int] = mapped_column(Integer, default=60)
+    spectrum: Mapped[str] = mapped_column(String, default="centre")
+    spectrum_basis: Mapped[str] = mapped_column(Text, default="")
+    publisher_group: Mapped[str | None] = mapped_column(String, nullable=True)
+    owner_preference: Mapped[float] = mapped_column(Float, default=1.0)
 
 
 class ArticleRow(Base):
@@ -56,6 +62,11 @@ class ArticleRow(Base):
     tier_at_ingest: Mapped[str] = mapped_column(String)
     raw_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     quarantine_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    full_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    origin_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    agency_credit: Mapped[str | None] = mapped_column(String, nullable=True)
+    extraction_method: Mapped[str | None] = mapped_column(String, nullable=True)
+    partial: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class EmbeddingRow(Base):
@@ -78,6 +89,10 @@ class StoryRow(Base):
     title_hint: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="active")
     article_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    centroid: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    independent_origin_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class DigestRunRow(Base):
@@ -115,6 +130,107 @@ class PublicationRow(Base):
     immutable_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class StoryArticleRow(Base):
+    __tablename__ = "story_articles"
+    story_id: Mapped[str] = mapped_column(String, primary_key=True)
+    article_id: Mapped[str] = mapped_column(String, primary_key=True)
+    similarity: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class ClaimRow(Base):
+    __tablename__ = "claims"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    article_id: Mapped[str] = mapped_column(String)
+    text: Mapped[str] = mapped_column(Text)
+    type: Mapped[str] = mapped_column(String)
+    speaker: Mapped[str | None] = mapped_column(String, nullable=True)
+    span_start: Mapped[int] = mapped_column(Integer, default=0)
+    span_end: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ClaimClusterRow(Base):
+    __tablename__ = "claim_clusters"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    story_id: Mapped[str] = mapped_column(String)
+    canonical_text: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = mapped_column(String)
+    origin_count: Mapped[int] = mapped_column(Integer, default=0)
+    contradict_count: Mapped[int] = mapped_column(Integer, default=0)
+    cross_spectrum: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ClaimEvidenceRow(Base):
+    __tablename__ = "claim_evidence"
+    claim_cluster_id: Mapped[str] = mapped_column(String, primary_key=True)
+    article_id: Mapped[str] = mapped_column(String, primary_key=True)
+    origin_id: Mapped[str] = mapped_column(String)
+    stance: Mapped[str] = mapped_column(String)
+    quote: Mapped[str] = mapped_column(Text, default="")
+    judge_model: Mapped[str] = mapped_column(String, default="heuristic")
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+
+
+class DigestSentenceRow(Base):
+    __tablename__ = "digest_sentences"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    draft_id: Mapped[str] = mapped_column(String)
+    story_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    section: Mapped[str] = mapped_column(String)
+    text: Mapped[str] = mapped_column(Text)
+    claim_cluster_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    citations_json: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    support_verdict: Mapped[str] = mapped_column(String, default="unchecked")
+    owner_flag: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class ClaimVectorRow(Base):
+    """JSON claim vectors for SQLite. Postgres also has claim_embeddings vector(512)."""
+
+    __tablename__ = "claim_vectors"
+    claim_id: Mapped[str] = mapped_column(String, primary_key=True)
+    story_id: Mapped[str] = mapped_column(String)
+    embedding: Mapped[list[float]] = mapped_column(JSON)
+
+
+class FlagEventRow(Base):
+    __tablename__ = "flag_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sentence_id: Mapped[str] = mapped_column(String)
+    draft_id: Mapped[str] = mapped_column(String)
+    flag: Mapped[str] = mapped_column(String)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SocialPostRow(Base):
+    __tablename__ = "social_posts"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    platform: Mapped[str] = mapped_column(String)
+    external_id: Mapped[str] = mapped_column(String)
+    author_handle: Mapped[str] = mapped_column(String, default="")
+    text: Mapped[str] = mapped_column(Text)
+    reach: Mapped[int] = mapped_column(Integer, default=0)
+    topic: Mapped[str] = mapped_column(String, default="")
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TrendPointRow(Base):
+    __tablename__ = "trend_points"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    topic: Mapped[str] = mapped_column(String)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    post_count: Mapped[int] = mapped_column(Integer, default=0)
+    baseline: Mapped[float] = mapped_column(Float, default=0.0)
+    burst: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class StoryAttentionRow(Base):
+    __tablename__ = "story_attention"
+    story_id: Mapped[str] = mapped_column(String, primary_key=True)
+    topic: Mapped[str] = mapped_column(String, primary_key=True)
+    attention: Mapped[float] = mapped_column(Float, default=0.0)
+    marker: Mapped[str] = mapped_column(String, default="")
+
+
 class SourceRatingRow(Base):
     __tablename__ = "source_ratings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -136,9 +252,50 @@ def make_engine(database_url: str) -> Any:
     return create_engine(url, future=True, connect_args=connect_args)
 
 
+def _sqlite_add_columns(engine: Any) -> None:
+    """create_all does not alter existing SQLite files. Add the claim-layer columns."""
+    if engine.dialect.name != "sqlite":
+        return
+    wanted: dict[str, list[tuple[str, str]]] = {
+        "sources": [
+            ("spectrum", "text not null default 'centre'"),
+            ("spectrum_basis", "text not null default ''"),
+            ("publisher_group", "text"),
+            ("owner_preference", "float not null default 1.0"),
+        ],
+        "articles": [
+            ("full_text", "text"),
+            ("origin_id", "text"),
+            ("agency_credit", "text"),
+            ("extraction_method", "text"),
+            ("partial", "boolean not null default 0"),
+        ],
+        "stories": [
+            ("centroid", "text"),
+            ("window_start", "datetime"),
+            ("window_end", "datetime"),
+            ("independent_origin_count", "integer not null default 0"),
+        ],
+        "claim_evidence": [
+            ("confidence", "float not null default 1.0"),
+        ],
+    }
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, columns in wanted.items():
+            if table not in inspector.get_table_names():
+                continue
+            present = {col["name"] for col in inspector.get_columns(table)}
+            for name, ddl in columns:
+                if name in present:
+                    continue
+                conn.execute(text(f"alter table {table} add column {name} {ddl}"))
+
+
 def init_db(database_url: str) -> sessionmaker[Session]:
     engine = make_engine(database_url)
     Base.metadata.create_all(engine)
+    _sqlite_add_columns(engine)
     return sessionmaker(engine, expire_on_commit=False, future=True)
 
 

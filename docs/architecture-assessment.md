@@ -2,7 +2,7 @@
 
 **Product:** Private, single-user Berlin & Germany political news digest agent  
 **Cadence:** Twice daily, Europe/Berlin  
-**Stack (locked):** Python 3.12, DBOS on **Supabase Postgres + pgvector**, **Railway** workers, Telegram, Playwright fallback, Anthropic, OpenAI embeddings (1536), OTel-lite, uv/ruff/mypy/pytest. Optional local Compose for dev only.
+**Stack:** Python 3.12, Supabase Postgres + pgvector, schedules via `pg_cron`, stage hand-off via Supabase Queues (`pgmq`). Railway workers do fetching, extraction, and model calls. Telegram, Playwright fallback, OpenAI embeddings (1536 articles, 512 claims), uv/ruff/mypy/pytest. DBOS is not used. Optional local Compose for dev only.
 
 This assessment scrutinizes the build brief against the owner's intent: **unbiased near-realtime digests**, **strong sources**, **social opinions/trends** (later), and an **agentic-first platform** for future news-source agents under guardrails.
 
@@ -14,7 +14,8 @@ This assessment scrutinizes the build brief against the owner's intent: **unbias
 | Compute | **Railway only** (no alternate prod host) |
 | Social | Phase B+; MVP contracts/tiers only |
 | Cadence / realtime | Digests-only MVP; alerts backlog |
-| Embeddings | OpenAI `text-embedding-3-small` @ 1536 |
+| Embeddings | OpenAI `text-embedding-3-small` @ 1536 for articles, 512 for claims |
+| Orchestration | `pg_cron` + `pgmq`. DBOS is dropped |
 | Scope of docs | Full M0–M7 plan kept; Railway-only compute |
 
 ---
@@ -68,8 +69,8 @@ Legend: **Keep** / **Change** / **Defer**
 
 | | |
 |--|--|
-| **Verdict** | **Keep** DBOS. **Locked:** Supabase = system of record; Railway = all workers. |
-| **Rationale** | Matches owner subscriptions; managed DB backups; durable steps for budgets/kill switch. |
+| **Verdict** | **Change (16 Nov 2026).** Drop DBOS. Supabase stays the system of record. Railway workers still do fetching, extraction, and model calls. Schedules are `pg_cron`. Stage hand-off is Supabase Queues (`pgmq`), one queue per pipeline stage. DBOS would be a second system on the same database doing the same job. |
+| **Rationale** | Postgres already has to store articles, claims, and vectors. Queues and cron on that database give retries and backpressure without a second orchestrator. This reverses the earlier lock on DBOS. |
 
 ### 2.2 Twice-daily vs “realtime”
 
@@ -124,7 +125,7 @@ Legend: **Keep** / **Change** / **Defer**
 - Private single-user, HITL Telegram gate  
 - Twice-daily Europe/Berlin digests  
 - Cluster → perspectives → divergence → events  
-- DBOS, budgets, kill switch, citation validation  
+- DBOS replaced by pg_cron + Supabase Queues; budgets, kill switch, citation validation stay  
 - pgvector + OpenAI 1536 embeddings  
 - Anthropic via `LLMProvider`  
 - Railway + Supabase  

@@ -124,23 +124,30 @@ def test_citation_validator_rejects_fabricated_url() -> None:
     assert result.ok is False
 
 
-def test_label_swap_perspectives_track_party() -> None:
+def test_views_only_when_a_source_states_them() -> None:
     store = MemoryStore()
     seed_demo_sources(store)
     pipe = DigestPipeline(store, _settings(), adapter=FixtureAdapter())
     result = pipe.run()
     assert result.draft is not None
-    labels = [p.party_label for p in result.draft.perspectives]
-    assert "SPD" in labels and "CDU/CSU" in labels
-    spd = next(p for p in result.draft.perspectives if p.party_label == "SPD")
-    assert "SPD" in spd.summary
+    assert result.draft.perspectives
+    for brief in result.draft.perspectives:
+        assert brief.party_label in brief.summary
+        assert brief.story_id is not None
+    labels = {brief.party_label for brief in result.draft.perspectives}
+    assert "SPD" in labels
+    from newsie.evals.label_swap import label_swap_ok, render_attributed
+
+    left = render_attributed("SPD", "SPD will den Mietendeckel verschärfen.")
+    right = render_attributed("FDP", "FDP will den Mietendeckel verschärfen.")
+    assert label_swap_ok(left, right, party_a="SPD", party_b="FDP")
 
 
-def test_ratings_update_reliability() -> None:
+def test_ratings_are_owner_preference_not_reliability() -> None:
     store = MemoryStore()
     seed_demo_sources(store)
     before = store.sources["tagesschau"].reliability_score
     store.rate_source("tagesschau", 0.5)
-    after = store.sources["tagesschau"].reliability_score
-    assert after != before
-    assert after == 0.5
+    source = store.sources["tagesschau"]
+    assert source.reliability_score == before
+    assert source.owner_preference == 0.5

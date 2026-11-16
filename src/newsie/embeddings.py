@@ -13,8 +13,7 @@ from newsie.domain import Article, ArticleEmbedding
 
 
 class EmbeddingProvider(Protocol):
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        ...
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
 class HashEmbeddingProvider:
@@ -22,8 +21,12 @@ class HashEmbeddingProvider:
 
     def __init__(self, dim: int = 1536) -> None:
         self.dim = dim
+        self.token_usage = 0
+        self.last_call_tokens = 0
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        self.last_call_tokens = 0
+        self.token_usage = 0
         return [self._one(t) for t in texts]
 
     def _one(self, text: str) -> list[float]:
@@ -48,6 +51,8 @@ class OpenAIEmbeddingProvider:
         self.api_key = api_key
         self.model = model
         self.dim = dim
+        self.token_usage = 0
+        self.last_call_tokens = 0
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         import httpx
@@ -59,9 +64,29 @@ class OpenAIEmbeddingProvider:
             timeout=60.0,
         )
         resp.raise_for_status()
-        data = resp.json()["data"]
-        data_sorted = sorted(data, key=lambda d: d["index"])
+        body = resp.json()
+        usage = body.get("usage") or {}
+        spent = int(usage.get("total_tokens") or 0)
+        self.last_call_tokens = spent
+        self.token_usage += spent
+        data_sorted = sorted(body["data"], key=lambda d: d["index"])
         return [row["embedding"] for row in data_sorted]
+
+
+def embed_claims(
+    texts: list[str],
+    provider: EmbeddingProvider,
+    *,
+    expect_dim: int | None = None,
+) -> list[list[float]]:
+    """Embed claim strings. Pass expect_dim when a dedicated 512-d model is in use."""
+    if not texts:
+        return []
+    vectors = provider.embed(texts)
+    for vector in vectors:
+        if expect_dim is not None and len(vector) != expect_dim:
+            raise ValueError(f"claim embedding dim mismatch: got {len(vector)}, want {expect_dim}")
+    return vectors
 
 
 def embed_articles(

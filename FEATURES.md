@@ -17,11 +17,12 @@ Update this file when something ships or when you want to capture a new idea (no
 | HITL approve path (no publish without approval) | shipped | `hitl.py` |
 | Citation validation hook | shipped | `citations.py` |
 | FastAPI web UI (fixture digest) | shipped | `uv run newsie web` |
-| Newspaper-style digest reader (categories, trending sources rail) | shipped | `src/newsie/web/presentation.py` |
+| Newspaper-style digest reader (flip cards, categories, trending sources rail) | shipped | Front is the headline; the back lists sources, what each framing means, and how outlets differ. `src/newsie/web/presentation.py` |
 | Live RSS ingest + HTTP adapter | shipped | `adapters/rss.py`, `http_adapter.py` |
 | SQL persistence (Phase 2) | shipped | `sql_store.py`, `migrations/001_init.sql` |
 | Agent ingest API (`agent_derived` tier enforced) | shipped | `ingest_api.py` |
-| Seed source registry (YAML) | shipped | `data/seed_sources.yaml` |
+| Source validation dry-run | shipped | `newsie validate-sources` fetches a feed and three articles and reports length, language, and truncation |
+| Claim and origin backbone | shipped | Origins, evidence labels, span citations. Social posts are not evidence and are not built yet |
 
 ---
 
@@ -33,19 +34,15 @@ Update this file when something ships or when you want to capture a new idea (no
 - **Goal:** Scheduled job that queries social feeds and trends via the **Grok API** to add real-time-ish signal on news topics and **sentiment** alongside RSS ingest.  
 - **Notes:**  
   - Runs on a cron schedule (align with digest TZ: `Europe/Berlin`; exact cadence TBD — likely between twice-daily digests or as a lighter poll).  
-  - Output should land as structured insights (topic, sentiment sketch, sample posts/links) tied to story clusters or digest sections—not raw social HTML in the LLM context without normalization.  
+  - Social posts are attention, not evidence. They use the `social_signal` tier and never count toward a label. A Grok answer can only spot topics; anything shown to a reader has to be raw post data. This waits until story ids are stable (after the claim layer).  
   - Respect existing guardrails: budgets, kill switch, untrusted content, no auto-publish.  
 - **Open decisions:** rate limits, which platforms Grok can see, retention in Supabase, how sentiment merges into M3 digest steps.
 
 ### Configure sources
 
-- **Status:** planned  
-- **Goal:** Owner-facing way to **add, edit, disable, and tag** sources without editing YAML by hand.  
-- **Scope ideas:**  
-  - CRUD on `sources` (URL, adapter type, tier, spectrum tags).  
-  - Validate feed URL before save (dry-run ingest).  
-  - Optional import/export of `seed_sources.yaml`.  
-- **Depends on:** stable M1 ingest + DB registry (partially in repo via SQL + seed file).
+- **Status:** shipped
+- **Goal:** Owner-facing way to **add, edit, disable, and tag** sources without editing YAML by hand.
+- **Shipped now:** `newsie validate-sources` fetches a feed and three articles. The editorial desk can add a source and disable one. Editing is the same form: saving an existing id replaces that source.
 
 ### Daily digest paper UX (categories + trending sources)
 

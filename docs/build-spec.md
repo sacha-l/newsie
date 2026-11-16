@@ -95,7 +95,7 @@ Dev (optional): local Compose / uv run against Supabase
 | Packaging | uv |
 | Quality | ruff, mypy, pytest |
 | Models / validation | Pydantic for configs and structured LLM I/O |
-| Orchestration | DBOS on Supabase Postgres |
+| Orchestration | pg_cron + pgmq on Supabase Postgres |
 | Database | **Supabase Postgres + pgvector** |
 | App host | **Railway** (prod); optional local Compose/`uv` for **dev only** |
 | Messaging | Telegram Bot API long polling |

@@ -1,4 +1,7 @@
-# Curated DE/Berlin political sources — RSS-first.
+# Curated DE/Berlin sources. Spectrum is one value from a fixed set.
+# spectrum_basis is the reason for that placement and is shown to the reader.
+# Feed URLs were not re-checked on 16 Nov 2026. Run `newsie validate-sources`
+# before treating a new feed as healthy. Paywalled outlets may store partial text.
 sources:
   - id: tagesschau
     name: Tagesschau
@@ -6,32 +9,240 @@ sources:
     feed_url: https://www.tagesschau.de/index~rss2.xml
     adapter: rss
     tier: reporting
-    spectrum_tags: [center]
-  - id: zeit
-    name: ZEIT ONLINE
-    homepage_url: https://www.zeit.de
-    feed_url: https://newsfeed.zeit.de/index
+    spectrum: centre
+    spectrum_basis: Public-broadcaster news desk. Placement is an editorial judgement, open to dispute.
+    publisher_group: ard
+  - id: zdfheute
+    name: ZDFheute
+    homepage_url: https://www.zdfheute.de
+    feed_url: https://www.zdf.de/rss/zdf/nachrichten
     adapter: rss
     tier: reporting
-    spectrum_tags: [center-left]
-  - id: spiegel
-    name: SPIEGEL
-    homepage_url: https://www.spiegel.de
-    feed_url: https://www.spiegel.de/schlagzeilen/index.rss
+    spectrum: centre
+    spectrum_basis: Public-broadcaster news desk. Placement is an editorial judgement, open to dispute.
+    publisher_group: zdf
+  - id: deutschlandfunk
+    name: Deutschlandfunk
+    homepage_url: https://www.deutschlandfunk.de
+    feed_url: https://www.deutschlandfunk.de/nachrichten-100.rss
     adapter: rss
     tier: reporting
-    spectrum_tags: [center-left]
+    spectrum: centre
+    spectrum_basis: Public-broadcaster news desk. Placement is an editorial judgement, open to dispute.
+    publisher_group: deutschlandradio
   - id: dw
     name: Deutsche Welle
     homepage_url: https://www.dw.com
     feed_url: https://rss.dw.com/rdf/rss-de-all
     adapter: rss
     tier: reporting
-    spectrum_tags: [center]
+    spectrum: centre
+    spectrum_basis: International public broadcaster, retained from the previous seed. Placement is an editorial judgement.
+    publisher_group: dw
   - id: rbb
-    name: rbb
+    name: rbb24
     homepage_url: https://www.rbb24.de
     feed_url: https://www.rbb24.de/aktuell/index.xml
     adapter: rss
     tier: reporting
-    spectrum_tags: [regional]
+    spectrum: regional
+    spectrum_basis: Berlin-Brandenburg public broadcaster. Tagged regional so local stories stay visible.
+    publisher_group: rbb
+  - id: sueddeutsche
+    name: Süddeutsche Zeitung
+    homepage_url: https://www.sueddeutsche.de
+    feed_url: https://rss.sueddeutsche.de/rss/Topthemen
+    adapter: rss
+    tier: reporting
+    spectrum: centre-left
+    spectrum_basis: Editorial judgement of the news pages. Open to dispute.
+    publisher_group: sueddeutsche
+  - id: zeit
+    name: ZEIT ONLINE
+    homepage_url: https://www.zeit.de
+    feed_url: https://newsfeed.zeit.de/index
+    adapter: rss
+    tier: reporting
+    spectrum: centre-left
+    spectrum_basis: Editorial judgement of the news pages. Open to dispute.
+    publisher_group: zeit
+  - id: spiegel
+    name: SPIEGEL
+    homepage_url: https://www.spiegel.de
+    feed_url: https://www.spiegel.de/schlagzeilen/index.rss
+    adapter: rss
+    tier: reporting
+    spectrum: centre-left
+    spectrum_basis: Editorial judgement of the news pages. Open to dispute.
+    publisher_group: spiegel
+  - id: taz
+    name: taz
+    homepage_url: https://taz.de
+    feed_url: https://taz.de/!p4608;rss/
+    adapter: rss
+    tier: reporting
+    spectrum: left
+    spectrum_basis: Editorial judgement. taz sits further left than SZ, ZEIT and SPIEGEL. Open to dispute.
+    publisher_group: taz
+  - id: faz
+    name: Frankfurter Allgemeine
+    homepage_url: https://www.faz.net
+    feed_url: https://www.faz.net/rss/aktuell/
+    adapter: rss
+    tier: reporting
+    spectrum: centre-right
+    spectrum_basis: Editorial judgement of the news pages. The list stops at mainstream centre-right.
+    publisher_group: faz
+  - id: welt
+    name: Welt
+    homepage_url: https://www.welt.de
+    feed_url: https://www.welt.de/feeds/latest.rss
+    adapter: rss
+    tier: reporting
+    spectrum: centre-right
+    spectrum_basis: Editorial judgement of the news pages. Axel Springer titles share one publisher group.
+    publisher_group: axel_springer
+  - id: nzz
+    name: NZZ Germany
+    homepage_url: https://www.nzz.ch
+    feed_url: https://www.nzz.ch/deutschland.rss
+    adapter: rss
+    tier: reporting
+    spectrum: centre-right
+    spectrum_basis: Editorial judgement of the Germany desk. Open to dispute.
+    publisher_group: nzz
+  - id: focus
+    name: Focus
+    homepage_url: https://www.focus.de
+    feed_url: https://www.focus.de/rss/focus_alles.xml
+    adapter: rss
+    tier: reporting
+    spectrum: centre-right
+    spectrum_basis: Editorial judgement of the news pages. Open to dispute.
+    publisher_group: burda
+  - id: tagesspiegel
+    name: Tagesspiegel
+    homepage_url: https://www.tagesspiegel.de
+    feed_url: https://www.tagesspiegel.de/contentexport/feed/home
+    adapter: rss
+    tier: reporting
+    spectrum: centre
+    spectrum_basis: Berlin daily. Editorial judgement, open to dispute.
+    publisher_group: tagesspiegel
+  - id: berliner-zeitung
+    name: Berliner Zeitung
+    homepage_url: https://www.berliner-zeitung.de
+    feed_url: https://www.berliner-zeitung.de/feed
+    adapter: rss
+    tier: reporting
+    spectrum: centre-left
+    spectrum_basis: Berlin daily. Editorial judgement, open to dispute.
+    publisher_group: berliner_zeitung
+  - id: morgenpost
+    name: Berliner Morgenpost
+    homepage_url: https://www.morgenpost.de
+    feed_url: https://www.morgenpost.de/rss
+    adapter: rss
+    tier: reporting
+    spectrum: centre-right
+    spectrum_basis: Berlin daily. Editorial judgement, open to dispute.
+    publisher_group: funke
+  - id: bundesregierung
+    name: Bundesregierung
+    homepage_url: https://www.bundesregierung.de
+    feed_url: https://www.bundesregierung.de/breg-de/service/rss-breg
+    adapter: rss
+    tier: official
+    spectrum: official
+    spectrum_basis: Primary government statements. Tier is official, so agreement here is not independent reporting.
+    publisher_group: bundesregierung
+  - id: bundestag
+    name: Bundestag hib
+    homepage_url: https://www.bundestag.de
+    feed_url: https://www.bundestag.de/static/appdata/includes/rss/hib.xml
+    adapter: rss
+    tier: official
+    spectrum: official
+    spectrum_basis: Parliamentary press service (hib). Tier is official.
+    publisher_group: bundestag
+  - id: berlin-senat
+    name: Berlin Senate
+    homepage_url: https://www.berlin.de
+    feed_url: https://www.berlin.de/rbmskzl/aktuelles/pressemitteilungen/index.php/rss
+    adapter: rss
+    tier: official
+    spectrum: official
+    spectrum_basis: Berlin Senate press office. Tier is official.
+    publisher_group: berlin_senat
+  - id: cdu
+    name: CDU
+    homepage_url: https://www.cdu.de
+    feed_url: https://www.cdu.de/feed
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed. The party describes itself; this is not a left-right placement of a newsroom.
+    publisher_group: cdu
+  - id: csu
+    name: CSU
+    homepage_url: https://www.csu.de
+    feed_url: https://www.csu.de/rss/pressemitteilungen/
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed. Separate from CDU so a CSU statement is not filed as the whole union.
+    publisher_group: csu
+  - id: spd
+    name: SPD
+    homepage_url: https://www.spd.de
+    feed_url: https://www.spd.de/presse/pressemitteilungen/rss/
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed.
+    publisher_group: spd
+  - id: gruene
+    name: Bündnis 90/Die Grünen
+    homepage_url: https://www.gruene.de
+    feed_url: https://www.gruene.de/rss.xml
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed.
+    publisher_group: gruene
+  - id: fdp
+    name: FDP
+    homepage_url: https://www.fdp.de
+    feed_url: https://www.fdp.de/rss.xml
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed.
+    publisher_group: fdp
+  - id: linke
+    name: Die Linke
+    homepage_url: https://www.die-linke.de
+    feed_url: https://www.die-linke.de/nc/presse/pressemitteilungen/rss/
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed.
+    publisher_group: linke
+  - id: afd
+    name: AfD
+    homepage_url: https://www.afd.de
+    feed_url: https://www.afd.de/feed/
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed. Included so a stated position can be quoted rather than inferred.
+    publisher_group: afd
+  - id: bsw
+    name: BSW
+    homepage_url: https://bsw-vg.de
+    feed_url: https://bsw-vg.de/feed/
+    adapter: rss
+    tier: opinion
+    spectrum: party
+    spectrum_basis: Party press feed.
+    publisher_group: bsw

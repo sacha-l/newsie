@@ -13,6 +13,7 @@ from newsie.domain import (
 )
 from newsie.guardrails import BudgetDimension, BudgetLedger, content_hash
 from newsie.store import MemoryStore
+from newsie.urls import canonicalise_url
 
 
 class IngestAuthError(RuntimeError):
@@ -48,10 +49,12 @@ def ingest_agent_articles(
         if not payload.provenance.content_hash:
             raise IngestValidationError("provenance.content_hash required")
         text_hash = content_hash(payload.content_text)
+        if payload.provenance.content_hash != text_hash:
+            raise IngestValidationError("provenance.content_hash does not match the submitted text")
         article = Article(
             source_id=f"agent:{agent.id}",
             url=str(payload.url),
-            canonical_url=str(payload.url),
+            canonical_url=canonicalise_url(str(payload.url)),
             title=payload.title,
             published_at=payload.published_at,
             retrieved_at=payload.provenance.retrieved_at,
@@ -64,9 +67,7 @@ def ingest_agent_articles(
                 "agent_id": agent.id,
             },
             quarantine_reason=(
-                None
-                if agent.trust_state == TrustState.TRUSTED
-                else "agent_quarantine"
+                None if agent.trust_state == TrustState.TRUSTED else "agent_quarantine"
             ),
         )
         # Agents cannot self-raise trust or set reporting tier (enforced above)

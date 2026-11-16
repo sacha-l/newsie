@@ -140,7 +140,7 @@ Aligned with [pstack](https://github.com/cursor/plugins/tree/main/pstack/skills)
 | Validation | Pydantic / pydantic-settings |
 | Demo embeddings | Deterministic hash vectors (1536-d) |
 | Prod embeddings | OpenAI `text-embedding-3-small` (interface ready) |
-| Prod LLM | Anthropic via `LLMProvider` (stub in demo) |
+| Prod LLM | Grok when `XAI_API_KEY` is set, otherwise the stub (demo) |
 | Quality | ruff, mypy, pytest |
 
 ## Project layout
@@ -154,4 +154,4 @@ ops/RESTORE.md       # Supabase restore notes
 
 ## Production notes
 
-Set env vars (see `.env.example`): `DATABASE_URL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, budget caps. Deploy workers on **Railway**; DB on **Supabase**. Dashboard and social collectors are out of MVP scope.
+Set env vars (see `.env.example`): `DATABASE_URL`, `XAI_API_KEY`, `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, budget caps. Deploy workers on **Railway**; DB on **Supabase**. Schedules are `pg_cron` and stage hand-off is `pgmq`.

@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
     cluster_similarity_threshold: float = 0.82
+    story_window_hours: int = 72
+    claim_similarity_threshold: float = 0.86
+    # Production claim vectors should use this width. The shared demo embedder
+    # stays on embedding_dim until a 512-d model is benchmarked.
+    claim_embedding_dim: int = 512
+    fetch_full_text: bool = True
+    origin_jaccard_threshold: float = 0.8
     playwright_enabled: bool = False
     kill_switch: bool = False
     database_url: str = "sqlite:///./newsie_data.db"
@@ -31,6 +38,8 @@ class Settings(BaseSettings):
     # postgresql://postgres....supabase.co:6543/postgres
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    xai_api_key: str | None = None
+    grok_model: str = "grok-4"
     telegram_bot_token: str | None = None
     telegram_owner_chat_id: str | None = None
     default_parties: list[str] = Field(
