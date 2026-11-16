@@ -17,7 +17,9 @@
       <h1 class="masthead-title">Newsie</h1>
       <p class="masthead-deck">English digest of German &amp; Berlin political news — read like an edition, approve like an editor.</p>
       <p class="how">Newsie collects reporting from across the spectrum, splits each article into claims, and counts independent origins rather than outlet names. A factual sentence stays in the edition only when a quoted passage from one of those articles supports it. Nothing is published until you approve it.</p>
-      {% if sample_banner %}
+      {% if mode == 'corpus' %}
+      <p class="sample-chip">Past 30 days of sources</p>
+      {% elif sample_banner %}
       <p class="sample-chip">Sample edition · fixture feeds</p>
       {% endif %}
       <div class="masthead-rule heavy"></div>

@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from newsie.cli import build_demo_pipeline
+from newsie.corpus import corpus_available, load_corpus_edition
 from newsie.pipeline import DigestPipeline
 
 
@@ -33,8 +34,24 @@ class SessionRegistry:
             if session_id and session_id in self._sessions:
                 return self._sessions[session_id]
             sid = str(uuid4())
-            pipeline, store = build_demo_pipeline()
-            sess = DemoSession(id=sid, store=store, pipeline=pipeline)
+            if corpus_available():
+                store, draft = load_corpus_edition()
+                pipeline, _demo = build_demo_pipeline()
+                pipeline.store = store
+                sess = DemoSession(
+                    id=sid,
+                    store=store,
+                    pipeline=pipeline,
+                    draft_id=draft.id,
+                    mode="corpus",
+                    messages=[
+                        "Edition from the last 30 days of the source list.",
+                        "Headlines link out. Article bodies are not stored in the app.",
+                    ],
+                )
+            else:
+                pipeline, store = build_demo_pipeline()
+                sess = DemoSession(id=sid, store=store, pipeline=pipeline)
             self._sessions[sid] = sess
             return sess
 

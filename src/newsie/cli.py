@@ -182,6 +182,25 @@ def _guess_lang(text: str) -> str:
     return "de" if german >= english else "en"
 
 
+def cmd_capture(args: argparse.Namespace) -> int:
+    from newsie.corpus import capture_corpus
+
+    payload = capture_corpus()
+    articles = payload["articles"]
+    stories = payload["stories"]
+    errors = payload["fetch_errors"]
+    print(
+        f"Captured {len(articles) if isinstance(articles, list) else 0} articles"
+        f" in {len(stories) if isinstance(stories, list) else 0} stories"
+    )
+    if isinstance(errors, list) and errors:
+        print(f"Feeds with errors: {len(errors)}")
+        for line in errors[:12]:
+            print(f"  {line}")
+    _ = args
+    return 0
+
+
 def cmd_report(_args: argparse.Namespace) -> int:
     from newsie.evals.metrics import beats_baseline, load_label_rows, score_label_rows
 
@@ -239,6 +258,12 @@ def main(argv: list[str] | None = None) -> None:
         help="Score the constructed label file and say which live audits are still open",
     )
     p_report.set_defaults(func=cmd_report)
+
+    p_capture = sub.add_parser(
+        "capture-corpus",
+        help="Fetch the last 30 days of seed feeds and write data/corpus/month.json",
+    )
+    p_capture.set_defaults(func=cmd_capture)
 
     p_web = sub.add_parser("web", help="Serve web UI")
     p_web.add_argument("--host", default="127.0.0.1")

@@ -52,7 +52,7 @@ def _ctx(request: Request, sess: DemoSession, **extra: Any) -> dict[str, Any]:
         "publication": pub,
         "story_count": len(stories),
         "article_count": len(sess.store.list_articles()),
-        "sample_banner": sess.mode != "live",
+        "sample_banner": sess.mode == "demo",
         "mode": sess.mode,
         **extra,
     }

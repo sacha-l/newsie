@@ -13,7 +13,7 @@ def test_home_ok() -> None:
     assert "Newsie" in r.text
     assert "independent origins" in r.text
     assert "Sources today" in r.text
-    assert "Sample edition" in r.text
+    assert "Past 30 days of sources" in r.text or "Sample edition" in r.text
 
 
 def test_run_approve_flow() -> None:
