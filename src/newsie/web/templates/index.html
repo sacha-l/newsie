@@ -16,6 +16,7 @@
       <p class="kicker">{{ edition.edition_label }}</p>
       <h1 class="masthead-title">Newsie</h1>
       <p class="masthead-deck">English digest of German &amp; Berlin political news — read like an edition, approve like an editor.</p>
+      <p class="how">Newsie collects reporting from across the spectrum, splits each article into claims, and counts independent origins rather than outlet names. A factual sentence stays in the edition only when a quoted passage from one of those articles supports it. Nothing is published until you approve it.</p>
       {% if sample_banner %}
       <p class="sample-chip">Sample edition · fixture feeds</p>
       {% endif %}
@@ -54,6 +55,7 @@
                 <span class="tag muted">untagged</span>
                 {% endif %}
                 <span class="tag muted">reliability {{ "%.2f"|format(s.reliability) }}</span>
+                {% if s.spectrum_basis %}<span class="tag muted">{{ s.spectrum_basis }}</span>{% endif %}
               </p>
             </details>
           </li>
@@ -73,7 +75,8 @@
                   <span class="card-headline">{{ story.headline }}</span>
                   <span class="card-dek">{{ story.dek }}</span>
                   <span class="card-foot">
-                    <span class="outlet-count">{{ story.outlet_count }} {% if story.outlet_count == 1 %}outlet{% else %}outlets{% endif %}</span>
+                    <span class="outlet-count">{{ story.evidence_label }}</span>
+                    {% if story.attention_marker %}<span class="tag">{{ story.attention_marker }}</span>{% endif %}
                     <span class="flip-cue">Flip for sources</span>
                   </span>
                 </button>
@@ -110,6 +113,7 @@
         {% endmacro %}
         {% if draft and edition.sections %}
         <div class="broadsheet">
+          <p class="prose">{{ edition.evidence_note }}</p>
           {% for section in edition.sections %}
             {% for story in section.stories if story.is_lead %}
               {{ story_card(story) }}
@@ -167,6 +171,41 @@
             {% if draft %}
             <p class="desk-meta">Validation <strong>{{ draft.validation_status }}</strong>{% if publication %} · Published{% endif %}</p>
             {% endif %}
+            {% if edition.review_queue %}
+            <p class="desk-meta">Least sure stance calls</p>
+            <ul>
+              {% for item in edition.review_queue %}
+              <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            <form class="rate-row" method="post" action="/sources">
+              <label for="new_source_id">Add a source</label>
+              <input id="new_source_id" name="source_id" placeholder="id" required />
+              <input name="name" placeholder="Name" required />
+              <input name="homepage_url" placeholder="https://example.de" required />
+              <input name="feed_url" placeholder="Feed URL" />
+              <select name="spectrum">
+                <option value="left">left</option>
+                <option value="centre-left">centre-left</option>
+                <option value="centre" selected>centre</option>
+                <option value="centre-right">centre-right</option>
+                <option value="right">right</option>
+                <option value="regional">regional</option>
+                <option value="official">official</option>
+                <option value="party">party</option>
+              </select>
+              <button class="ghost" type="submit">Add source</button>
+            </form>
+            <form class="rate-row" method="post" action="/sources/disable">
+              <label for="disable_source_id">Disable a source</label>
+              <select id="disable_source_id" name="source_id">
+                {% for s in edition.trending %}
+                <option value="{{ s.source_id }}">{{ s.name }}</option>
+                {% endfor %}
+              </select>
+              <button class="danger" type="submit">Disable</button>
+            </form>
             <form class="rate-row" method="post" action="/rate">
               <label for="source_id">Adjust source weight</label>
               <select id="source_id" name="source_id">

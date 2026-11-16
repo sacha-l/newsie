@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from newsie.config import Settings
 from newsie.sql_store import SqlStore
-from newsie.store import MemoryStore
+from newsie.store import MemoryStore, Store
 
 
-def create_store(settings: Settings, *, force_memory: bool = False) -> Any:
+def create_store(settings: Settings, *, force_memory: bool = False) -> Store:
     if force_memory:
         return MemoryStore()
     url = settings.database_url.strip()

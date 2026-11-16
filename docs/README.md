@@ -16,12 +16,12 @@ flowchart TB
 
   subgraph railway [Railway]
     Ingest[Ingest_worker]
-    Digest[Digest_worker_DBOS]
+    Digest[Digest_worker]
     TgWorker[Telegram_worker]
   end
 
   subgraph supabase [Supabase]
-    DB[(Postgres_pgvector_DBOS)]
+    DB[(Postgres_pgvector_pgmq)]
   end
 
   subgraph external [External_APIs]

@@ -11,6 +11,7 @@ def test_home_ok() -> None:
     r = client.get("/")
     assert r.status_code == 200
     assert "Newsie" in r.text
+    assert "independent origins" in r.text
     assert "Sources today" in r.text
     assert "Sample edition" in r.text
 

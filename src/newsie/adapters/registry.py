@@ -13,7 +13,7 @@ from newsie.http_client import FetchError
 class AdapterRouter:
     """Routes each source to its adapter; records fetch errors without aborting the run."""
 
-    def __init__(self, *, allow_fixture_fallback: bool = True) -> None:
+    def __init__(self, *, allow_fixture_fallback: bool = False) -> None:
         self.rss = RssAdapter()
         self.http = HttpAdapter()
         self.fixture = FixtureAdapter()

@@ -13,7 +13,7 @@ Details: [architecture-assessment.md](./architecture-assessment.md) · [build-pl
 ## Constraints
 
 - No public dashboard (out of scope)
-- Python 3.12, DBOS, pgvector, Telegram HITL, Anthropic primary LLM
+- Python 3.12, pgvector, pg_cron, pgmq, Telegram HITL, model calls behind LLMProvider
 - Owner approval required before publish
 - No application repo yet — docs only until build starts
 

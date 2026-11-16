@@ -10,13 +10,13 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from newsie.domain import Article, DigestDraft, PerspectiveBrief, PoliticalEvent, Source, Story
+from newsie.signals import least_sure
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
 CATEGORY_ORDER = (
     "Germany & politics",
     "Berlin & Brandenburg",
-    "Corroborated wire",
 )
 
 
@@ -27,6 +27,7 @@ class HeadlineItem:
     source_id: str
     source_name: str
     spectrum_tags: tuple[str, ...] = ()
+    spectrum_basis: str = ""
 
 
 @dataclass(frozen=True)
@@ -45,9 +46,12 @@ class StoryBlock:
     items: tuple[HeadlineItem, ...]
     dek: str
     outlet_count: int
+    independent_origins: int
+    evidence_label: str
     meanings: tuple[FramingNote, ...]
     differ_line: str
     is_lead: bool = False
+    attention_marker: str = ""
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,8 @@ class TrendingSource:
     reliability: float
     spectrum_tags: tuple[str, ...]
     trending: bool
+    spectrum_basis: str = ""
+    owner_preference: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -76,6 +82,8 @@ class DigestView:
     perspectives: tuple[PerspectiveBrief, ...]
     trending: tuple[TrendingSource, ...]
     validation_status: str | None
+    evidence_note: str = "Labels describe how widely something is reported, not whether it is true."
+    review_queue: tuple[str, ...] = ()
 
 
 def _sources_map(store: Any) -> dict[str, Source]:
@@ -98,11 +106,9 @@ def _story_category(articles: list[Article], sources: dict[str, Source]) -> str:
     for art in articles:
         src = sources.get(art.source_id)
         if src is not None:
-            tags.update(src.spectrum_tags)
+            tags.add(src.spectrum.value)
     if "regional" in tags:
         return "Berlin & Brandenburg"
-    if len(articles) >= 2:
-        return "Corroborated wire"
     return "Germany & politics"
 
 
@@ -124,6 +130,7 @@ def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
         source_id=art.source_id,
         source_name=src.name if src else art.source_id,
         spectrum_tags=tuple(src.spectrum_tags) if src else (),
+        spectrum_basis=src.spectrum_basis if src else "",
     )
 
 
@@ -131,10 +138,20 @@ def _framing_phrase(tags: tuple[str, ...]) -> str:
     found = set(tags)
     if "regional" in found:
         return "Berlin/local framing"
-    if "center-left" in found:
+    if "centre-left" in found or "center-left" in found:
         return "social-priority framing"
-    if "center" in found:
+    if "centre-right" in found or "center-right" in found:
+        return "centre-right framing"
+    if "centre" in found or "center" in found:
         return "institutional/mainstream framing"
+    if "left" in found:
+        return "left framing"
+    if "right" in found:
+        return "right framing"
+    if "official" in found:
+        return "an official statement"
+    if "party" in found:
+        return "a party statement"
     if tags:
         return f"{tags[0].replace('-', ' ')} framing"
     return "a general news framing"
@@ -154,14 +171,8 @@ def _differ_line(items: tuple[HeadlineItem, ...], divergence_text: str) -> str:
         return f"{named} cover this story with different headlines."
     note = " ".join(divergence_text.split())
     if note:
-        return (
-            "This story is single-sourced. "
-            f"See how outlets differ in this edition: {note}"
-        )
-    return (
-        "This story is single-sourced. "
-        "See how outlets differ in the edition divergence note."
-    )
+        return f"This story is single-sourced. See how outlets differ in this edition: {note}"
+    return "This story is single-sourced. See how outlets differ in the edition divergence note."
 
 
 def _story_block(
@@ -171,6 +182,7 @@ def _story_block(
     corroboration: float,
     items: tuple[HeadlineItem, ...],
     divergence_text: str,
+    attention_marker: str = "",
 ) -> StoryBlock:
     return StoryBlock(
         headline=headline,
@@ -180,10 +192,16 @@ def _story_block(
         dek=items[0].title,
         outlet_count=len({item.source_id for item in items}),
         meanings=tuple(
-            FramingNote(outlet=item.source_name, sentence=_meaning_sentence(item))
-            for item in items
+            FramingNote(outlet=item.source_name, sentence=_meaning_sentence(item)) for item in items
         ),
         differ_line=_differ_line(items, divergence_text),
+        independent_origins=int(corroboration),
+        evidence_label=(
+            f"{int(corroboration)} independent origin"
+            if int(corroboration) == 1
+            else f"{int(corroboration)} independent origins"
+        ),
+        attention_marker=attention_marker,
     )
 
 
@@ -193,8 +211,7 @@ def _mark_lead(blocks: list[StoryBlock]) -> list[StoryBlock]:
         return blocks
     lead_at = max(range(len(blocks)), key=lambda i: (blocks[i].corroboration, -i))
     return [
-        replace(block, is_lead=True) if i == lead_at else block
-        for i, block in enumerate(blocks)
+        replace(block, is_lead=True) if i == lead_at else block for i, block in enumerate(blocks)
     ]
 
 
@@ -203,7 +220,7 @@ def _build_trending(
     sources: dict[str, Source],
 ) -> tuple[TrendingSource, ...]:
     if not articles:
-        enabled = list(sources.values())
+        enabled = [source for source in sources.values() if source.enabled]
         if not enabled:
             return ()
         rows = [
@@ -215,6 +232,8 @@ def _build_trending(
                 reliability=s.reliability_score,
                 spectrum_tags=tuple(s.spectrum_tags),
                 trending=False,
+                spectrum_basis=s.spectrum_basis,
+                owner_preference=s.owner_preference,
             )
             for s in sorted(enabled, key=lambda x: x.name)
         ]
@@ -239,6 +258,8 @@ def _build_trending(
                 reliability=reliability,
                 spectrum_tags=tags,
                 trending=count == max_count and count > 0,
+                spectrum_basis=src.spectrum_basis if src else "",
+                owner_preference=src.owner_preference if src else 1.0,
             )
         )
     return tuple(out)
@@ -253,6 +274,11 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         return None
 
     stories_by_id: dict[UUID, Story] = {s.id: s for s in store.list_stories()}
+    markers = {
+        row.story_id: row.marker
+        for row in (store.list_attention() if hasattr(store, "list_attention") else [])
+        if row.marker
+    }
     articles_by_id: dict[UUID, Article] = {a.id: a for a in articles}
     divergence_text = _strip_md_heading(draft.divergence_md)
 
@@ -261,11 +287,7 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         story = stories_by_id.get(story_id)
         if story is None:
             continue
-        cluster_arts = [
-            articles_by_id[aid]
-            for aid in story.article_ids
-            if aid in articles_by_id
-        ]
+        cluster_arts = [articles_by_id[aid] for aid in story.article_ids if aid in articles_by_id]
         if not cluster_arts:
             continue
         category = _story_category(cluster_arts, sources)
@@ -274,9 +296,10 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
             _story_block(
                 headline=story.title_hint,
                 category=category,
-                corroboration=story.corroboration_score,
+                corroboration=float(story.independent_origin_count),
                 items=items,
                 divergence_text=divergence_text,
+                attention_marker=markers.get(story.id, ""),
             )
         )
 
@@ -302,17 +325,13 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
     for block in blocks:
         by_cat[block.category].append(block)
 
-    ordered_titles = list(CATEGORY_ORDER) + sorted(
-        k for k in by_cat if k not in CATEGORY_ORDER
-    )
+    ordered_titles = list(CATEGORY_ORDER) + sorted(k for k in by_cat if k not in CATEGORY_ORDER)
     sections: list[CategorySection] = []
     for title in ordered_titles:
         stories_in_cat = by_cat.get(title)
         if not stories_in_cat:
             continue
-        sections.append(
-            CategorySection(title=title, stories=tuple(stories_in_cat))
-        )
+        sections.append(CategorySection(title=title, stories=tuple(stories_in_cat)))
 
     edition = _edition_label(draft.created_at)
 
@@ -324,7 +343,19 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         perspectives=tuple(draft.perspectives),
         trending=trending,
         validation_status=draft.validation_status,
+        review_queue=_review_queue(store),
     )
+
+
+def _review_queue(store: Any) -> tuple[str, ...]:
+    if not hasattr(store, "list_evidence"):
+        return ()
+    items = [
+        (row.quote or row.origin_id, float(row.confidence))
+        for row in store.list_evidence()
+        if row.confidence < 0.55 and (row.quote or row.origin_id)
+    ]
+    return tuple(f"{text} ({score:.2f})" for text, score in least_sure(items, 5))
 
 
 def build_sources_only_view(store: Any) -> DigestView:

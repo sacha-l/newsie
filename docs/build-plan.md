@@ -1,7 +1,8 @@
 # Build Plan — VPS News App
 
-Aligned with the brief's M0–M7, revised per [architecture-assessment.md](./architecture-assessment.md).  
-**No implementation in this task** — this plan is what we execute next.
+Aligned with the brief's M0–M7, revised per [architecture-assessment.md](./architecture-assessment.md).
+
+Phases 1–5 are implemented in the tree. What still needs a live corpus, and is not marked done: a week of clean ingest, a measured wire-copy rate, clustering scored on 30 hand-checked stories, and the label rule beating an outlet-count baseline on 100 audited sentences. `newsie report` scores only the constructed label file.
 
 ---
 
@@ -21,8 +22,8 @@ Aligned with the brief's M0–M7, revised per [architecture-assessment.md](./arc
 |-------|------|--------|
 | M0 | **M0** Foundation | Repo, Supabase wiring, config/secrets, OTel-lite, kill switch, Railway stub; optional local Compose for dev |
 | M1 | **M1** Ingest | Source registry, RSS adapters, optional Playwright, provenance, quarantine |
-| M2 | **M2** Cluster | OpenAI embeddings (1536), pgvector, story clusters, corroboration scores |
-| M3 | **M3** Digest brain | Factual spine, perspective briefs, divergence, events, citation validator |
+| M2 | **Phase 3** Origins and clustering | Stable story ids, origin detection, centroid assignment. Replaces the old corroboration score. |
+| M3 | **Phases 4–5** Claims and synthesis | Claim extraction, evidence labels, span citations, per-story views. |
 | M4 | **M4** Publish HITL | Telegram long polling on Railway, approve/reject/rate, publish records in Supabase |
 | M5 | **M5** Reliability loop | Ratings → source weights; neutrality label-swap evals in CI/nightly |
 | M6 | **M6** Hardening | Budgets enforced, prompt-injection tests, egress allowlist, restore drill |
@@ -88,7 +89,29 @@ Aligned with the brief's M0–M7, revised per [architecture-assessment.md](./arc
 
 ---
 
+### Phase 3 — Origins and clustering (replaces M2)
+
+Stable story ids, a 72-hour window, origin detection before any counting, and centroid assignment. `corroboration_score` is retired. Membership lives in `story_articles`.
+
+Done when the wire-copy rate has been measured and clustering has been scored on 30 hand-checked stories. The assignment code, `story_articles`, and `nearest_open_story` are in place. The measurement is not: there is no 30-story gold set yet.
+
+### Phase 4 — Claims and evidence (replaces the first half of M3)
+
+`claims.py`, `evidence.py`, the tables in `migrations/002_claims.sql`, and `label_claim`. The label is a plain function of origin counts. Social-signal items never count.
+
+Done when labels beat an outlet-count baseline on 100 audited sentences. `label_claim` and `newsie report` are in place. The report's gold file is four constructed rows, not that audit.
+
+### Phase 5 — Synthesis and validation (replaces the rest of M3)
+
+Per-story spine from corroborated claims, views only from attributed statements, span citations, and a validator that checks the passage supports the sentence. Approval stores a per-sentence `citation_wrong` flag.
+
+Done when a digest whose every factual sentence has a supported citation passes validation. The deterministic path and a model gloss that embeds its quote both do. A gloss that does not support its sentence is dropped.
+
+Phases 1 and 2 (defect fixes, source list, full text, rate limits, balance report) are in the tree. A week of live ingest has not been run, and several party feed URLs are still unchecked. M4 to M6 stay as below, except that owner ratings no longer write `reliability_score` and the per-sentence flag is part of approval.
+
 ### M2 — Cluster
+
+Superseded by Phase 3 above. The notes below are the old plan.
 
 **Order of work**
 
@@ -109,6 +132,8 @@ Aligned with the brief's M0–M7, revised per [architecture-assessment.md](./arc
 ---
 
 ### M3 — Digest brain
+
+Superseded by Phases 4 and 5 above.
 
 **Order of work**
 

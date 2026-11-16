@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from newsie.cli import build_demo_pipeline, build_live_pipeline
+from newsie.domain import AdapterKind, Source, Spectrum
 from newsie.hitl import HitlError, approve_draft, reject_draft
 from newsie.web.presentation import build_digest_view, build_sources_only_view
 from newsie.web.session import DemoSession, registry
@@ -22,6 +24,7 @@ app = FastAPI(title="Newsie", version="0.2.0")
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 COOKIE = "newsie_sid"
+_SOURCE_ID = re.compile(r"^[a-z0-9-]{2,40}$")
 
 
 def _session(request: Request) -> DemoSession:
@@ -112,7 +115,8 @@ async def approve(request: Request) -> HTMLResponse:
             pub = approve_draft(sess.store, sess.draft_id, kill_switch=sess.pipeline.kill_switch)
             sess.publication_id = pub.id
             sess.last_status = "published"
-            sess.messages = [f"Published (demo HITL) {pub.id}"]
+            balance = str(pub.immutable_snapshot.get("balance_text") or "")
+            sess.messages = [f"Published (demo HITL) {pub.id}", balance]
         except HitlError as exc:
             sess.messages = [str(exc)]
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
@@ -147,8 +151,63 @@ async def rate(
         sess.messages = [f"Unknown source: {source_id}"]
     else:
         sess.store.rate_source(source_id, score)
-        rel = sess.store.sources[source_id].reliability_score
-        sess.messages = [f"Rated {source_id} → reliability {rel:.2f}"]
+        source = sess.store.sources[source_id]
+        sess.messages = [
+            f"Rated {source_id} → owner preference {source.owner_preference:.2f}",
+            f"Measured reliability stays {source.reliability_score:.2f}",
+        ]
+    resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
+    _set_cookie(resp, sess.id)
+    return resp
+
+
+@app.post("/sources", response_class=HTMLResponse)
+async def add_source(
+    request: Request,
+    source_id: str = Form(...),
+    name: str = Form(...),
+    homepage_url: str = Form(...),
+    feed_url: str = Form(""),
+    spectrum: str = Form("centre"),
+) -> HTMLResponse:
+    sess = _session(request)
+    cleaned = source_id.strip().lower()
+    try:
+        placement = Spectrum(spectrum)
+    except ValueError:
+        placement = None
+    bad_id = _SOURCE_ID.fullmatch(cleaned) is None
+    bad_home = not homepage_url.startswith("http")
+    if bad_id or placement is None or bad_home:
+        sess.messages = ["Source needs an id like tagesspiegel, a name, and an http homepage"]
+    else:
+        sess.store.upsert_source(
+            Source(
+                id=cleaned,
+                name=name.strip() or cleaned,
+                homepage_url=homepage_url.strip(),
+                feed_url=feed_url.strip() or None,
+                adapter=AdapterKind.RSS,
+                spectrum=placement,
+                spectrum_basis="Added from the editorial desk",
+                enabled=True,
+            )
+        )
+        sess.messages = [f"Source {cleaned} saved"]
+    resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
+    _set_cookie(resp, sess.id)
+    return resp
+
+
+@app.post("/sources/disable", response_class=HTMLResponse)
+async def disable_source(request: Request, source_id: str = Form(...)) -> HTMLResponse:
+    sess = _session(request)
+    source = sess.store.sources.get(source_id)
+    if source is None:
+        sess.messages = [f"Unknown source: {source_id}"]
+    else:
+        sess.store.upsert_source(source.model_copy(update={"enabled": False}))
+        sess.messages = [f"Disabled {source_id}"]
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
     _set_cookie(resp, sess.id)
     return resp

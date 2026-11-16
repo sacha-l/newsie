@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -36,12 +36,22 @@ class RssAdapter:
         if not source.feed_url:
             return []
         try:
-            raw = self._fetch_text(source.feed_url)
+            if self._fetch_text is fetch_text:
+                raw = fetch_text(
+                    source.feed_url,
+                    rate_limit_per_hour=source.rate_limit_per_hour,
+                )
+            else:
+                raw = self._fetch_text(source.feed_url)
         except FetchError:
             raise
         parsed = feedparser.parse(raw)
         out: list[ArticleCandidate] = []
-        for entry in parsed.entries[: ctx.max_articles]:
+        deadline = ctx.deadline if ctx.deadline.tzinfo else ctx.deadline.replace(tzinfo=UTC)
+        cutoff = deadline - timedelta(hours=ctx.lookback_hours)
+        for entry in parsed.entries:
+            if len(out) >= ctx.max_articles:
+                break
             link = getattr(entry, "link", None) or ""
             title = getattr(entry, "title", "") or ""
             summary = getattr(entry, "summary", None) or getattr(entry, "description", "") or ""
@@ -50,6 +60,8 @@ class RssAdapter:
             published = _parse_date(getattr(entry, "published", None)) or _parse_date(
                 getattr(entry, "updated", None)
             )
+            if published is not None and published < cutoff:
+                continue
             out.append(
                 ArticleCandidate(
                     url=link,
@@ -57,7 +69,11 @@ class RssAdapter:
                     content_text=f"{title}\n\n{summary}".strip(),
                     published_at=published,
                     language=source.language,
-                    raw_metadata={"adapter": "rss", "feed_url": source.feed_url},
+                    raw_metadata={
+                        "adapter": "rss",
+                        "feed_url": source.feed_url,
+                        "extraction_method": "rss_summary",
+                    },
                 )
             )
         return out
