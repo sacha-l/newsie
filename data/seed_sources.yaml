@@ -1,0 +1,20 @@
+# Starter DE/Berlin sources — demo uses FixtureAdapter; prod uses feed_url with RssAdapter.
+sources:
+  - id: tagesschau
+    name: Tagesschau
+    homepage_url: https://www.tagesschau.de
+    feed_url: https://www.tagesschau.de/index~rss2.xml
+    tier: reporting
+    spectrum_tags: [center]
+  - id: rbb
+    name: rbb
+    homepage_url: https://www.rbb24.de
+    feed_url: null
+    tier: reporting
+    spectrum_tags: [regional]
+  - id: zeit
+    name: ZEIT ONLINE
+    homepage_url: https://www.zeit.de
+    feed_url: https://newsfeed.zeit.de/index
+    tier: reporting
+    spectrum_tags: [center-left]
