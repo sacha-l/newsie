@@ -74,14 +74,27 @@ uv sync --group dev
 uv run newsie demo
 ```
 
-### Web UI (Phase 1)
+### Web UI
 
 ```bash
 uv run newsie web --host 127.0.0.1 --port 8000
-# open http://127.0.0.1:8000 — Run digest → Approve / Reject / Rate
+# open http://127.0.0.1:8000
+# Run sample (fixtures) or Run live RSS (real Tagesschau/ZEIT/SPIEGEL/DW feeds)
 ```
 
-Vercel: `vercel` from repo root (requires `vercel login`). Entry: `api/index.py`.
+### Live CLI fetch
+
+```bash
+uv run newsie live
+```
+
+### Persistence (Phase 2)
+
+Default: SQLite `newsie_data.db` via `DATABASE_URL`.  
+Supabase: set `DATABASE_URL` to your pooler URL and apply `migrations/001_init.sql` (enables `vector`).
+
+Vercel: `vercel deploy` / claim temporary deploys. Entry: `api/index.py`.  
+Note: anonymous `*.tmp.now` URLs often return **403 in browsers** — use local UI or claim the deployment.
 
 What you should see:
 

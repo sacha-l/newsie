@@ -13,3 +13,4 @@ build/
 newsie_demo.db
 *.db
 .DS_Store
+.vercel

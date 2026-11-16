@@ -1,20 +1,37 @@
-# Starter DE/Berlin sources — demo uses FixtureAdapter; prod uses feed_url with RssAdapter.
+# Curated DE/Berlin political sources — RSS-first.
 sources:
   - id: tagesschau
     name: Tagesschau
     homepage_url: https://www.tagesschau.de
     feed_url: https://www.tagesschau.de/index~rss2.xml
+    adapter: rss
+    tier: reporting
+    spectrum_tags: [center]
+  - id: zeit
+    name: ZEIT ONLINE
+    homepage_url: https://www.zeit.de
+    feed_url: https://newsfeed.zeit.de/index
+    adapter: rss
+    tier: reporting
+    spectrum_tags: [center-left]
+  - id: spiegel
+    name: SPIEGEL
+    homepage_url: https://www.spiegel.de
+    feed_url: https://www.spiegel.de/schlagzeilen/index.rss
+    adapter: rss
+    tier: reporting
+    spectrum_tags: [center-left]
+  - id: dw
+    name: Deutsche Welle
+    homepage_url: https://www.dw.com
+    feed_url: https://rss.dw.com/rdf/rss-de-all
+    adapter: rss
     tier: reporting
     spectrum_tags: [center]
   - id: rbb
     name: rbb
     homepage_url: https://www.rbb24.de
-    feed_url: null
+    feed_url: https://www.rbb24.de/aktuell/index.xml
+    adapter: rss
     tier: reporting
     spectrum_tags: [regional]
-  - id: zeit
-    name: ZEIT ONLINE
-    homepage_url: https://www.zeit.de
-    feed_url: https://newsfeed.zeit.de/index
-    tier: reporting
-    spectrum_tags: [center-left]

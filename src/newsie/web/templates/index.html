@@ -22,7 +22,12 @@
     <section class="panel">
       <div class="actions">
         <form method="post" action="/run">
-          <button class="primary" type="submit">Run digest</button>
+          <input type="hidden" name="mode" value="demo" />
+          <button class="ghost" type="submit">Run sample</button>
+        </form>
+        <form method="post" action="/run">
+          <input type="hidden" name="mode" value="live" />
+          <button class="primary" type="submit">Run live RSS</button>
         </form>
         <form method="post" action="/approve">
           <button class="ghost" type="submit" {% if not draft or draft.validation_status != 'ok' or publication %}disabled{% endif %}>Approve</button>

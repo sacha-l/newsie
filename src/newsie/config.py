@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     cluster_similarity_threshold: float = 0.82
     playwright_enabled: bool = False
     kill_switch: bool = False
-    database_url: str = "sqlite:///./newsie_demo.db"
+    database_url: str = "sqlite:///./newsie_data.db"
     demo_mode: bool = True
+    # Set to your Supabase pooler URL for Phase 2 Postgres, e.g.
+    # postgresql://postgres....supabase.co:6543/postgres
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     telegram_bot_token: str | None = None

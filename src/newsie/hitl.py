@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from newsie.domain import DigestDraft, Publication
 from newsie.guardrails import KillSwitch
-from newsie.store import MemoryStore
 
 
 class HitlError(RuntimeError):
@@ -15,7 +15,7 @@ class HitlError(RuntimeError):
 
 
 def approve_draft(
-    store: MemoryStore,
+    store: Any,
     draft_id: UUID,
     *,
     kill_switch: KillSwitch,
@@ -29,7 +29,7 @@ def approve_draft(
         raise HitlError(f"draft not validated: {draft.validation_status}")
     for pub in store.publications.values():
         if pub.draft_id == draft_id:
-            return pub  # idempotent re-approve
+            return Publication.model_validate(pub)  # idempotent re-approve
     publication = Publication(
         draft_id=draft_id,
         approved_at=datetime.now(UTC),
@@ -40,7 +40,7 @@ def approve_draft(
     return publication
 
 
-def reject_draft(store: MemoryStore, draft_id: UUID, reason: str) -> DigestDraft:
+def reject_draft(store: Any, draft_id: UUID, reason: str) -> DigestDraft:
     draft = store.get_draft(draft_id)
     if draft is None:
         raise HitlError(f"draft not found: {draft_id}")
@@ -48,4 +48,4 @@ def reject_draft(store: MemoryStore, draft_id: UUID, reason: str) -> DigestDraft
         update={"validation_status": f"rejected:{reason}"},
     )
     store.save_draft(updated)
-    return updated
+    return DigestDraft.model_validate(updated)

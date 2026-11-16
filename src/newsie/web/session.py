@@ -4,22 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Lock
+from typing import Any
 from uuid import UUID, uuid4
 
 from newsie.cli import build_demo_pipeline
 from newsie.pipeline import DigestPipeline
-from newsie.store import MemoryStore
 
 
 @dataclass
 class DemoSession:
     id: str
-    store: MemoryStore
+    store: Any
     pipeline: DigestPipeline
     draft_id: UUID | None = None
     publication_id: UUID | None = None
     last_status: str = "idle"
     messages: list[str] = field(default_factory=list)
+    mode: str = "demo"
 
 
 class SessionRegistry:

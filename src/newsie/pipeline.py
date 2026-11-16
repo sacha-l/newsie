@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from newsie.adapters.base import FetchContext, SourceAdapter
+from newsie.adapters.registry import AdapterRouter
 from newsie.citations import validate_draft
 from newsie.cluster import cluster_articles, rank_stories
 from newsie.config import Settings
 from newsie.digest import LLMProvider, StubLLMProvider, build_draft_for_stories
-from newsie.domain import Article, DigestDraft, DigestRun, Source
+from newsie.domain import Article, DigestDraft, DigestRun
 from newsie.embeddings import EmbeddingProvider, HashEmbeddingProvider, embed_articles
 from newsie.guardrails import (
     BudgetDimension,
@@ -22,7 +23,7 @@ from newsie.guardrails import (
     LoopGuard,
     content_hash,
 )
-from newsie.store import MemoryStore
+from newsie.sources import load_live_sources, load_seed_sources
 
 
 @dataclass
@@ -31,16 +32,17 @@ class PipelineResult:
     draft: DigestDraft | None
     articles_ingested: int
     stories: int
-    errors: list[str]
+    errors: list[str] = field(default_factory=list)
+    fetch_errors: list[str] = field(default_factory=list)
 
 
 class DigestPipeline:
     def __init__(
         self,
-        store: MemoryStore,
+        store: Any,
         settings: Settings,
         *,
-        adapter: SourceAdapter,
+        adapter: SourceAdapter | AdapterRouter,
         embedder: EmbeddingProvider | None = None,
         llm: LLMProvider | None = None,
         kill_switch: KillSwitch | None = None,
@@ -76,6 +78,8 @@ class DigestPipeline:
             max_iterations=self.settings.max_sources_per_run + 1,
             name="ingest_sources",
         )
+        if isinstance(self.adapter, AdapterRouter):
+            self.adapter.errors.clear()
         new_count = 0
         now = datetime.now(UTC)
         for source in sources:
@@ -92,7 +96,6 @@ class DigestPipeline:
                 text = cand.content_text.strip()
                 if not text:
                     continue
-                # Prompt-injection hardening: treat content as data only (never execute)
                 article = Article(
                     source_id=source.id,
                     url=cand.url,
@@ -118,12 +121,10 @@ class DigestPipeline:
         missing = self.store.articles_missing_embeddings()
         if not missing:
             return 0
-        # Bound embed batch size for efficiency
         batch = missing[: self.settings.max_fetches_per_run]
         embeddings = embed_articles(batch, self.embedder, self.settings)
         for emb in embeddings:
             self.store.save_embedding(emb)
-        # Charge a nominal token cost for embedding work in demo
         self.budget.charge(BudgetDimension.LLM_TOKENS, min(1000, 50 * len(batch)))
         return len(embeddings)
 
@@ -135,14 +136,17 @@ class DigestPipeline:
             for a in articles
             if (emb := self.store.get_embedding(a.id)) is not None
         }
+        # Cap O(n^2) work for large live feeds
+        max_arts = min(len(articles), 60)
+        articles = sorted(articles, key=lambda a: a.retrieved_at, reverse=True)[:max_arts]
+        # Greedy cluster ticks ~ n + n*n times
         stories = cluster_articles(
             articles,
             emb_map,
             self.store.sources,
             threshold=self.settings.cluster_similarity_threshold,
-            max_iterations=max(100, len(articles) * len(articles) + 10),
+            max_iterations=max(500, max_arts * (max_arts + 3) + 50),
         )
-        # Idempotent story replace by fingerprint for demo store
         existing_fps = {s.fingerprint: s for s in self.store.list_stories()}
         for story in stories:
             if story.fingerprint in existing_fps:
@@ -151,7 +155,8 @@ class DigestPipeline:
                 self.store.save_story(merged)
             else:
                 self.store.save_story(story)
-        return self.store.list_stories()
+        out: list[Any] = list(self.store.list_stories())
+        return out
 
     def build_digest(self, run: DigestRun) -> DigestDraft:
         self._step("digest")
@@ -189,11 +194,14 @@ class DigestPipeline:
         run = DigestRun(scheduled_for=now, started_at=now, status="running")
         self.store.save_run(run)
         errors: list[str] = []
+        fetch_errors: list[str] = []
         draft: DigestDraft | None = None
         ingested = 0
         story_count = 0
         try:
             ingested = self.ingest()
+            if isinstance(self.adapter, AdapterRouter):
+                fetch_errors = list(self.adapter.errors)
             self.embed_new()
             stories = self.cluster()
             story_count = len(stories)
@@ -206,7 +214,9 @@ class DigestPipeline:
                     }
                 )
                 self.store.save_run(run)
-                return PipelineResult(run, None, ingested, 0, ["no stories"])
+                return PipelineResult(
+                    run, None, ingested, 0, ["no stories"], fetch_errors=fetch_errors
+                )
             draft = self.build_digest(run)
             run = run.model_copy(
                 update={
@@ -226,37 +236,14 @@ class DigestPipeline:
                 }
             )
         self.store.save_run(run)
-        return PipelineResult(run, draft, ingested, story_count, errors)
+        return PipelineResult(run, draft, ingested, story_count, errors, fetch_errors=fetch_errors)
 
 
-def seed_demo_sources(store: MemoryStore) -> None:
-    from newsie.domain import AdapterKind
+def seed_demo_sources(store: Any) -> None:
+    for s in load_seed_sources(demo_mode=True):
+        store.upsert_source(s)
 
-    seeds = [
-        Source(
-            id="tagesschau",
-            name="Tagesschau",
-            homepage_url="https://www.tagesschau.de",
-            feed_url="https://www.tagesschau.de/index~rss2.xml",
-            adapter=AdapterKind.FIXTURE,
-            spectrum_tags=["center"],
-        ),
-        Source(
-            id="rbb",
-            name="rbb",
-            homepage_url="https://www.rbb24.de",
-            feed_url=None,
-            adapter=AdapterKind.FIXTURE,
-            spectrum_tags=["regional"],
-        ),
-        Source(
-            id="zeit",
-            name="ZEIT ONLINE",
-            homepage_url="https://www.zeit.de",
-            feed_url="https://newsfeed.zeit.de/index",
-            adapter=AdapterKind.FIXTURE,
-            spectrum_tags=["center-left"],
-        ),
-    ]
-    for s in seeds:
+
+def seed_live_sources(store: Any) -> None:
+    for s in load_live_sources():
         store.upsert_source(s)
