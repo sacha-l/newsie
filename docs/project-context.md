@@ -5,17 +5,21 @@ Details: [architecture-assessment.md](./architecture-assessment.md) · [build-pl
 
 ## Goals
 
-- Private single-user **near-realtime** English digests of **German/Berlin political news** (2×/day, `Europe/Berlin`)
-- **Unbiased by process:** citation-backed spine, labeled perspectives, divergence, evals, HITL
-- **Agentic-first:** contracts so later agents can contribute as news sources under trust, provenance, budgets, neutrality
-- Later: social opinions/trends as an explicit **signal tier**, not factual spine
+Newsie is an event-centred desk. See [product.md](./product.md).
+
+- Private single-user English reading of **German/Berlin political events** (2×/day, `Europe/Berlin`)
+- Group reporting by occurrence, not by a lone embedding, and record why an article joined
+- Keep claims inspectable: passage, support relation, and an evidence state rather than a truth score
+- Describe a collected sample. Do not infer ideology from a publisher, or public opinion from volume
+- Human approval before anything is published
+- Agentic ingest stays a quarantined source tier, never an authority for facts
 
 ## Constraints
 
 - No public dashboard (out of scope)
 - Python 3.12, pgvector, pg_cron, pgmq, Telegram HITL, model calls behind LLMProvider
 - Owner approval required before publish
-- No application repo yet — docs only until build starts
+- The application in this repo is the MVP path: ingest, event resolution, a cited brief, and human approval
 
 ## Locked decisions (owner + architecture)
 
@@ -46,4 +50,4 @@ Social collectors · priority alerts · continuous timeline · dashboard · seco
 
 ## Non-goals (MVP)
 
-Dashboard · social firehose · auto-publish · multi-tenant · HA multi-region · self-hosted prod compute
+Publisher ideology scores · auto-publish · multi-tenant · a knowledge graph · treating article volume as public opinion
