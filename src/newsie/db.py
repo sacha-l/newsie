@@ -93,6 +93,11 @@ class StoryRow(Base):
     window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     independent_origin_count: Mapped[int] = mapped_column(Integer, default=0)
+    actors: Mapped[list[str]] = mapped_column(JSON, default=list)
+    location: Mapped[str] = mapped_column(String, default="")
+    resolution_confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    assignment_notes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    parent_story_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class DigestRunRow(Base):
@@ -157,6 +162,7 @@ class ClaimClusterRow(Base):
     origin_count: Mapped[int] = mapped_column(Integer, default=0)
     contradict_count: Mapped[int] = mapped_column(Integer, default=0)
     cross_spectrum: Mapped[bool] = mapped_column(Boolean, default=False)
+    assessment: Mapped[str] = mapped_column(String, default="")
 
 
 class ClaimEvidenceRow(Base):
@@ -275,6 +281,14 @@ def _sqlite_add_columns(engine: Any) -> None:
             ("window_start", "datetime"),
             ("window_end", "datetime"),
             ("independent_origin_count", "integer not null default 0"),
+            ("actors", "text not null default '[]'"),
+            ("location", "text not null default ''"),
+            ("resolution_confidence", "float not null default 1.0"),
+            ("assignment_notes", "text not null default '[]'"),
+            ("parent_story_id", "text"),
+        ],
+        "claim_clusters": [
+            ("assessment", "text not null default ''"),
         ],
         "claim_evidence": [
             ("confidence", "float not null default 1.0"),

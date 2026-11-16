@@ -12,6 +12,7 @@ from uuid import UUID
 from newsie.cluster import cosine
 from newsie.domain import (
     Article,
+    Assessment,
     Claim,
     ClaimCluster,
     ClaimEvidence,
@@ -21,6 +22,7 @@ from newsie.domain import (
     SourceTier,
     Stance,
     Story,
+    SupportRelation,
 )
 from newsie.guardrails import LoopGuard
 from newsie.llm import LLMProvider
@@ -53,17 +55,40 @@ def label_claim(
     return EvidenceLabel.SINGLE_ORIGIN, cross
 
 
-def passage_supports(sentence: str, quote: str) -> bool:
-    """The quoted passage has to carry the sentence, not merely sit in the same article."""
+def support_relation(sentence: str, quote: str) -> SupportRelation:
+    """Direct support is not the same as sharing a subject."""
     if not quote or not sentence:
-        return False
+        return SupportRelation.NONE
     if quote in sentence or sentence in quote:
-        return True
+        return SupportRelation.DIRECT
     sentence_tokens = set(sentence.lower().split())
     quote_tokens = set(quote.lower().split())
     if not sentence_tokens:
-        return False
-    return len(sentence_tokens & quote_tokens) / len(sentence_tokens) >= 0.5
+        return SupportRelation.NONE
+    overlap = len(sentence_tokens & quote_tokens) / len(sentence_tokens)
+    if overlap >= 0.75:
+        return SupportRelation.DIRECT
+    if overlap >= 0.5:
+        return SupportRelation.PARTIAL
+    if overlap > 0:
+        return SupportRelation.CONTEXT
+    return SupportRelation.NONE
+
+
+def passage_supports(sentence: str, quote: str) -> bool:
+    """The quoted passage has to carry the sentence, not merely sit in the same article."""
+    return support_relation(sentence, quote) in {SupportRelation.DIRECT, SupportRelation.PARTIAL}
+
+
+def assessment_of(label: EvidenceLabel) -> Assessment:
+    """Map the count rule onto an explicit evidence state. There is no truth score."""
+    if label == EvidenceLabel.CONTESTED:
+        return Assessment.DISPUTED
+    if label in {EvidenceLabel.SINGLE_ORIGIN, EvidenceLabel.CIRCULATING}:
+        return Assessment.UNVERIFIED
+    if label in {EvidenceLabel.CORROBORATED, EvidenceLabel.OFFICIAL_ONLY}:
+        return Assessment.SUPPORTED
+    return Assessment.NOT_VERIFIABLE
 
 
 def stance_confidence(claim: str, passage: str) -> float:
@@ -152,6 +177,7 @@ def match_story(
             story_id=story.id,
             canonical_text=canonical,
             label=EvidenceLabel.SINGLE_ORIGIN,
+            assessment=Assessment.UNVERIFIED.value,
         )
         support_origins: set[str] = set()
         contradict_origins: set[str] = set()
@@ -207,6 +233,7 @@ def match_story(
                     "origin_count": len(support_origins),
                     "contradict_count": len(contradict_origins),
                     "cross_spectrum": cross,
+                    "assessment": assessment_of(label).value,
                 }
             )
         )
@@ -242,7 +269,14 @@ def factual_clusters(clusters: list[ClaimCluster], claims: list[Claim]) -> list[
     attributed = {
         claim.text.strip().lower()
         for claim in claims
-        if claim.type in (ClaimType.ATTRIBUTED, ClaimType.OPINION)
+        if claim.type
+        in (
+            ClaimType.ATTRIBUTED,
+            ClaimType.OPINION,
+            ClaimType.ALLEGATION,
+            ClaimType.ANALYSIS,
+            ClaimType.PREDICTION,
+        )
     }
     return [
         cluster

@@ -211,6 +211,11 @@ class SqlStore:
                 window_start=story.window_start,
                 window_end=story.window_end,
                 independent_origin_count=story.independent_origin_count,
+                actors=list(story.actors),
+                location=story.location,
+                resolution_confidence=story.resolution_confidence,
+                assignment_notes=list(story.assignment_notes),
+                parent_story_id=str(story.parent_story_id) if story.parent_story_id else None,
             )
             if existing is None:
                 s.add(StoryRow(**data))
@@ -453,6 +458,7 @@ class SqlStore:
                         origin_count=cluster.origin_count,
                         contradict_count=cluster.contradict_count,
                         cross_spectrum=cluster.cross_spectrum,
+                        assessment=cluster.assessment,
                     )
                 )
             for row in evidence:
@@ -481,6 +487,7 @@ class SqlStore:
                     origin_count=row.origin_count,
                     contradict_count=row.contradict_count,
                     cross_spectrum=row.cross_spectrum,
+                    assessment=getattr(row, "assessment", "") or "",
                 )
                 for row in rows
             ]
@@ -784,6 +791,13 @@ class SqlStore:
             window_start=r.window_start,
             window_end=r.window_end,
             independent_origin_count=r.independent_origin_count or 0,
+            actors=list(getattr(r, "actors", None) or []),
+            location=getattr(r, "location", "") or "",
+            resolution_confidence=float(getattr(r, "resolution_confidence", 1.0) or 1.0),
+            assignment_notes=list(getattr(r, "assignment_notes", None) or []),
+            parent_story_id=(
+                UUID(r.parent_story_id) if getattr(r, "parent_story_id", None) else None
+            ),
         )
 
     def _to_sentence(self, r: DigestSentenceRow) -> DigestSentence:

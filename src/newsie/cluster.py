@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from newsie.domain import Article, ArticleEmbedding, Source, SourceTier, Story
+from newsie.events import JoinDecision, describe_join, facets_of
 from newsie.guardrails import LoopGuard
 
 TIER_WEIGHT = {
@@ -145,8 +146,24 @@ def assign_stories(
                 if score >= best_score:
                     best = story
                     best_score = score
+        decision = JoinDecision(False, "", 1.0, (), "")
+        rejected_id: UUID | None = None
+        if best is not None:
+            neighbours = [item for item in articles if item.id in set(best.article_ids)]
+            decision = describe_join(article, best, neighbours, best_score)
+            if not decision.join:
+                rejected_id = best.id
+                best = None
         if best is None:
             start = when
+            actors, location = facets_of(f"{article.title} {article.body_text()[:500]}")
+            note = f"{article.id}: opened as a new event"
+            confidence = 1.0
+            if rejected_id is not None:
+                note = f"{article.id}: {decision.reason} near {rejected_id}"
+                confidence = decision.confidence
+                actors = decision.actors or actors
+                location = decision.location or location
             opened = Story(
                 fingerprint="",
                 first_seen_at=article.retrieved_at,
@@ -158,6 +175,11 @@ def assign_stories(
                 window_start=start,
                 window_end=start + timedelta(hours=window_hours),
                 independent_origin_count=independent_origin_count([article]),
+                actors=list(actors),
+                location=location,
+                resolution_confidence=confidence,
+                assignment_notes=[note],
+                parent_story_id=rejected_id,
             )
             opened = opened.model_copy(update={"fingerprint": str(opened.id)})
             stories.append(opened)
@@ -178,6 +200,13 @@ def assign_stories(
                 "last_seen_at": max(best.last_seen_at, article.retrieved_at),
                 "independent_origin_count": independent_origin_count(member_articles),
                 "title_hint": best.title_hint or article.title,
+                "actors": list(dict.fromkeys([*best.actors, *decision.actors])),
+                "location": best.location or decision.location,
+                "resolution_confidence": min(best.resolution_confidence, decision.confidence),
+                "assignment_notes": [
+                    *best.assignment_notes,
+                    f"{article.id}: {decision.reason}",
+                ],
             }
         )
         stories = [updated if item.id == best.id else item for item in stories]

@@ -47,8 +47,31 @@ class Spectrum(StrEnum):
 
 
 class ClaimType(StrEnum):
+    """`fact` is a reported observation. The other values keep interpretation out of that bucket."""
+
     FACT = "fact"
+    OBSERVATION = "observation"
     ATTRIBUTED = "attributed_statement"
+    ALLEGATION = "allegation"
+    ANALYSIS = "analysis"
+    PREDICTION = "prediction"
+    OPINION = "opinion"
+
+
+class SupportRelation(StrEnum):
+    DIRECT = "direct"
+    PARTIAL = "partial"
+    CONTEXT = "context"
+    NONE = "none"
+
+
+class Assessment(StrEnum):
+    SUPPORTED = "supported"
+    PARTIALLY_SUPPORTED = "partially_supported"
+    CONTRADICTED = "contradicted"
+    DISPUTED = "disputed"
+    UNVERIFIED = "unverified"
+    NOT_VERIFIABLE = "not_verifiable"
     OPINION = "opinion"
 
 
@@ -150,6 +173,11 @@ class Story(BaseModel):
     independent_origin_count: int = 0
     # Retired. Ranking uses independent_origin_count. Kept so older rows still load.
     corroboration_score: float = 0.0
+    actors: list[str] = Field(default_factory=list)
+    location: str = ""
+    resolution_confidence: float = 1.0
+    assignment_notes: list[str] = Field(default_factory=list)
+    parent_story_id: UUID | None = None
 
 
 class StoryArticle(BaseModel):
@@ -176,6 +204,7 @@ class ClaimCluster(BaseModel):
     origin_count: int = 0
     contradict_count: int = 0
     cross_spectrum: bool = False
+    assessment: str = ""
 
 
 class ClaimEvidence(BaseModel):

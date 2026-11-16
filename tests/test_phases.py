@@ -310,7 +310,10 @@ def test_nearest_story_hook_assigns_without_a_local_scan() -> None:
         nearest=nearest,
     )
     joined = next(item for item in assigned if item.id == story.id)
-    assert second.id in joined.article_ids
+    assert second.id not in joined.article_ids
+    opened = next(item for item in assigned if second.id in item.article_ids)
+    assert opened.parent_story_id == story.id
+    assert "rejected" in opened.assignment_notes[0]
 
 
 def test_scores_and_constructed_label_file() -> None:
