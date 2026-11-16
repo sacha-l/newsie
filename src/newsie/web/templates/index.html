@@ -15,8 +15,9 @@
       <div class="masthead-rule"></div>
       <p class="kicker">{{ edition.edition_label }}</p>
       <h1 class="masthead-title">Newsie</h1>
-      <p class="masthead-deck">English digest of German &amp; Berlin political news — read like an edition, approve like an editor.</p>
-      <p class="how">Newsie collects reporting from across the spectrum, splits each article into claims, and counts independent origins rather than outlet names. A factual sentence stays in the edition only when a quoted passage from one of those articles supports it. Nothing is published until you approve it.</p>
+      <p class="masthead-deck">An event desk for German and Berlin political news. Compare reports of the same event, then approve what is published.</p>
+      <p class="how">Newsie groups articles that describe the same occurrence, then separates what is known, what is only claimed, where accounts differ, and what is still unclear. It counts independent origins once when several outlets repeat the same report. A sentence stays in the edition only when a quoted passage supports it. Nothing is published until you approve it.</p>
+      <p class="masthead-links"><a href="/events">Event board</a></p>
       {% if mode == 'corpus' %}
       <p class="sample-chip">Past 30 days of sources</p>
       {% elif sample_banner %}
@@ -36,7 +37,7 @@
     <div class="spread">
       <aside class="rail" aria-label="Sources today">
         <h2 class="rail-title">Sources today</h2>
-        <p class="rail-lede">Volume in this edition — trending outlets marked.</p>
+        <p class="rail-lede">Article counts in this collected sample. Not a measure of all coverage.</p>
         <ol class="source-trend">
           {% for s in edition.trending %}
           <li class="source-row{% if s.trending %} is-hot{% endif %}">
@@ -91,16 +92,11 @@
                   {% for item in story.items %}
                   <li>
                     <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.source_name }}</a>
-                    {% if item.spectrum_tags %}
-                    <span class="tag-line">
-                      {% for tag in item.spectrum_tags %}<span class="tag">{{ tag }}</span>{% endfor %}
-                    </span>
-                    {% endif %}
                     <span class="source-title">{{ item.title }}</span>
                   </li>
                   {% endfor %}
                 </ul>
-                <h3 class="back-head">What the opinion means</h3>
+                <h3 class="back-head">Headlines in this sample</h3>
                 <ul class="meaning-list">
                   {% for note in story.meanings %}
                   <li>{{ note.sentence }}</li>

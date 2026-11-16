@@ -69,10 +69,9 @@ def test_corroborated_card_has_sources_meaning_and_differ_line() -> None:
     assert card.dek == left.title
     assert card.meanings
     joined = " ".join(note.sentence for note in card.meanings)
-    assert "Tagesschau" in joined
-    assert "institutional/mainstream framing" in joined
-    assert "rbb" in joined
-    assert "Berlin/local framing" in joined
+    assert "Tagesschau headline:" in joined
+    assert "rbb24 headline:" in joined
+    assert "framing" not in joined
     assert "Tagesschau" in card.differ_line
     assert "rbb" in card.differ_line
     assert left.title in card.differ_line

@@ -720,3 +720,101 @@ button.flip-close {
   .rail,
   .folio { animation: none; }
 }
+
+.masthead-links {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  margin: 0.8rem 0 0;
+}
+
+.verdict-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 1.5rem 0 0.5rem;
+  font-family: var(--font-ui);
+}
+
+.verdict-strip p { margin: 0; }
+.verdict-strip strong {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 560;
+  display: block;
+}
+
+.event-row {
+  margin: 2.2rem 0 0;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule-heavy);
+}
+
+.event-row h2 {
+  font-family: var(--font-display);
+  font-weight: 560;
+  font-size: 1.7rem;
+  line-height: 1.2;
+  margin: 0 0 0.35rem;
+  max-width: 38rem;
+}
+
+.sample-counts,
+.why {
+  color: var(--ink-soft);
+  max-width: 42rem;
+}
+
+.ruler {
+  position: relative;
+  height: 4.5rem;
+  margin: 1.2rem 0 1.4rem;
+  border-bottom: 1px solid var(--ink);
+}
+
+.tick {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 7rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.tick-name,
+.tick-when {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.tick-when { color: var(--muted); }
+
+.tick::before {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 0.9rem;
+  margin: 0 auto 0.25rem;
+  background: var(--accent);
+}
+
+.questions { margin: 0; }
+.questions div {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--rule);
+}
+.questions dt {
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+}
+.questions dd { margin: 0; max-width: 40rem; }
+.questions dd p { margin: 0 0 0.35rem; }
+
+@media (max-width: 720px) {
+  .questions div { grid-template-columns: 1fr; gap: 0.2rem; }
+  .ruler { height: 5.5rem; }
+}

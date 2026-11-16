@@ -32,8 +32,15 @@ def test_run_html_has_flip_card() -> None:
     assert 'class="flip-toggle"' in r.text
     assert "Flip for sources" in r.text
     assert ">Sources<" in r.text
-    assert "What the opinion means" in r.text
+    assert "Headlines in this sample" in r.text
     assert "How it differs" in r.text
+
+
+def test_event_board_describes_the_collected_sample() -> None:
+    page = client.get("/events")
+    assert page.status_code == 200
+    assert "collected sample" in page.text
+    assert "What is known" in page.text
 
 
 def test_static_assets_served_by_app() -> None:

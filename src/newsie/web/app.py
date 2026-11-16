@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from newsie.cli import build_demo_pipeline, build_live_pipeline
 from newsie.domain import AdapterKind, Source, Spectrum
+from newsie.events import build_event_board
 from newsie.hitl import HitlError, approve_draft, reject_draft
 from newsie.web.presentation import build_digest_view, build_sources_only_view
 from newsie.web.session import DemoSession, registry
@@ -66,6 +67,23 @@ def _set_cookie(response: HTMLResponse, session_id: str) -> None:
 async def home(request: Request) -> HTMLResponse:
     sess = _session(request)
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
+    _set_cookie(resp, sess.id)
+    return resp
+
+
+@app.get("/events", response_class=HTMLResponse)
+async def events_page(request: Request) -> HTMLResponse:
+    sess = _session(request)
+    draft = sess.store.get_draft(sess.draft_id) if sess.draft_id else None
+    board = build_event_board(
+        stories=sess.store.list_stories(),
+        articles=sess.store.list_articles(),
+        sources=sess.store.sources,
+        draft=draft,
+    )
+    resp = templates.TemplateResponse(
+        request, "events.html", {**_ctx(request, sess), "board": board}
+    )
     _set_cookie(resp, sess.id)
     return resp
 

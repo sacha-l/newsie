@@ -32,7 +32,7 @@ class HeadlineItem:
 
 @dataclass(frozen=True)
 class FramingNote:
-    """One outlet's framing, derived from spectrum tags (no LLM call)."""
+    """What this article itself says. Not a guess from the publisher's placement."""
 
     outlet: str
     sentence: str
@@ -134,31 +134,8 @@ def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
     )
 
 
-def _framing_phrase(tags: tuple[str, ...]) -> str:
-    found = set(tags)
-    if "regional" in found:
-        return "Berlin/local framing"
-    if "centre-left" in found or "center-left" in found:
-        return "social-priority framing"
-    if "centre-right" in found or "center-right" in found:
-        return "centre-right framing"
-    if "centre" in found or "center" in found:
-        return "institutional/mainstream framing"
-    if "left" in found:
-        return "left framing"
-    if "right" in found:
-        return "right framing"
-    if "official" in found:
-        return "an official statement"
-    if "party" in found:
-        return "a party statement"
-    if tags:
-        return f"{tags[0].replace('-', ' ')} framing"
-    return "a general news framing"
-
-
 def _meaning_sentence(item: HeadlineItem) -> str:
-    return f"{item.source_name} reads this with {_framing_phrase(item.spectrum_tags)}."
+    return f"{item.source_name} headline: {item.title}."
 
 
 def _differ_line(items: tuple[HeadlineItem, ...], divergence_text: str) -> str:
