@@ -74,6 +74,15 @@ uv sync --group dev
 uv run newsie demo
 ```
 
+### Web UI (Phase 1)
+
+```bash
+uv run newsie web --host 127.0.0.1 --port 8000
+# open http://127.0.0.1:8000 — Run digest → Approve / Reject / Rate
+```
+
+Vercel: `vercel` from repo root (requires `vercel login`). Entry: `api/index.py`.
+
 What you should see:
 
 1. A digest with factual spine, party perspectives, divergence, and events  

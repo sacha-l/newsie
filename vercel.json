@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "env": {
+    "PYTHONPATH": "src"
+  },
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "src/newsie/web/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "api/index.py"
+    }
+  ]
+}
