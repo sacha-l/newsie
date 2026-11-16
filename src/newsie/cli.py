@@ -85,6 +85,16 @@ def cmd_approve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    host = args.host
+    port = args.port
+    print(f"Newsie web UI → http://{host}:{port}")
+    uvicorn.run("newsie.web.app:app", host=host, port=port, reload=False)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="newsie", description="Newsie political news digest")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -99,6 +109,11 @@ def main(argv: list[str] | None = None) -> None:
     p_approve.add_argument("--draft-id", default=None)
     p_approve.add_argument("--reject", default=None, help="Reject with reason")
     p_approve.set_defaults(func=cmd_approve)
+
+    p_web = sub.add_parser("web", help="Serve Phase 1 demo web UI")
+    p_web.add_argument("--host", default="127.0.0.1")
+    p_web.add_argument("--port", type=int, default=8000)
+    p_web.set_defaults(func=cmd_web)
 
     args = parser.parse_args(argv)
     raise SystemExit(args.func(args))

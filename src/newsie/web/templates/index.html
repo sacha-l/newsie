@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Newsie — Berlin & Germany political digest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;650&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <h1 class="brand">Newsie</h1>
+      <p class="tagline">Unbiased English digests of German &amp; Berlin political news — sample offline pipeline with HITL controls.</p>
+      {% if sample_banner %}
+      <div class="banner">Sample data · fixture sources · no live API keys required</div>
+      {% endif %}
+    </header>
+
+    <section class="panel">
+      <div class="actions">
+        <form method="post" action="/run">
+          <button class="primary" type="submit">Run digest</button>
+        </form>
+        <form method="post" action="/approve">
+          <button class="ghost" type="submit" {% if not draft or draft.validation_status != 'ok' or publication %}disabled{% endif %}>Approve</button>
+        </form>
+        <form method="post" action="/reject">
+          <input type="hidden" name="reason" value="owner_reject" />
+          <button class="danger" type="submit" {% if not draft %}disabled{% endif %}>Reject</button>
+        </form>
+      </div>
+
+      <div class="meta">
+        <span>Status <strong>{{ status }}</strong></span>
+        <span>Articles <strong>{{ article_count }}</strong></span>
+        <span>Stories <strong>{{ story_count }}</strong></span>
+        {% if draft %}<span>Validation <strong>{{ draft.validation_status }}</strong></span>{% endif %}
+      </div>
+
+      {% if messages %}
+      <ul class="msgs">
+        {% for m in messages %}
+        <li>{{ m }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if draft and draft.english_render_md %}
+      <article class="digest">{{ draft.english_render_md }}</article>
+      {% elif not draft %}
+      <p class="empty">No digest yet. Hit <strong>Run digest</strong> to generate a sample Berlin/Germany brief.</p>
+      {% endif %}
+
+      <form class="rate-row" method="post" action="/rate">
+        <label for="source_id">Rate source</label>
+        <select id="source_id" name="source_id">
+          <option value="tagesschau">tagesschau</option>
+          <option value="rbb">rbb</option>
+          <option value="zeit">zeit</option>
+        </select>
+        <input type="number" name="score" min="0.1" max="1.5" step="0.1" value="1.2" />
+        <button class="ghost" type="submit">Save rating</button>
+      </form>
+    </section>
+
+    <footer>
+      Phase 1 demo UI · core pipeline from the newsie CLI · Railway/Supabase/Telegram remain production targets.
+    </footer>
+  </main>
+</body>
+</html>
