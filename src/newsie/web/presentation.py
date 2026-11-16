@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -30,11 +30,24 @@ class HeadlineItem:
 
 
 @dataclass(frozen=True)
+class FramingNote:
+    """One outlet's framing, derived from spectrum tags (no LLM call)."""
+
+    outlet: str
+    sentence: str
+
+
+@dataclass(frozen=True)
 class StoryBlock:
     headline: str
     category: str
     corroboration: float
     items: tuple[HeadlineItem, ...]
+    dek: str
+    outlet_count: int
+    meanings: tuple[FramingNote, ...]
+    differ_line: str
+    is_lead: bool = False
 
 
 @dataclass(frozen=True)
@@ -114,6 +127,77 @@ def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
     )
 
 
+def _framing_phrase(tags: tuple[str, ...]) -> str:
+    found = set(tags)
+    if "regional" in found:
+        return "Berlin/local framing"
+    if "center-left" in found:
+        return "social-priority framing"
+    if "center" in found:
+        return "institutional/mainstream framing"
+    if tags:
+        return f"{tags[0].replace('-', ' ')} framing"
+    return "a general news framing"
+
+
+def _meaning_sentence(item: HeadlineItem) -> str:
+    return f"{item.source_name} reads this with {_framing_phrase(item.spectrum_tags)}."
+
+
+def _differ_line(items: tuple[HeadlineItem, ...], divergence_text: str) -> str:
+    if len(items) >= 2:
+        bits = [f"{item.source_name} (“{item.title}”)" for item in items]
+        if len(bits) == 2:
+            named = f"{bits[0]} and {bits[1]}"
+        else:
+            named = ", ".join(bits[:-1]) + ", and " + bits[-1]
+        return f"{named} cover this story with different headlines."
+    note = " ".join(divergence_text.split())
+    if note:
+        return (
+            "This story is single-sourced. "
+            f"See how outlets differ in this edition: {note}"
+        )
+    return (
+        "This story is single-sourced. "
+        "See how outlets differ in the edition divergence note."
+    )
+
+
+def _story_block(
+    *,
+    headline: str,
+    category: str,
+    corroboration: float,
+    items: tuple[HeadlineItem, ...],
+    divergence_text: str,
+) -> StoryBlock:
+    return StoryBlock(
+        headline=headline,
+        category=category,
+        corroboration=corroboration,
+        items=items,
+        dek=items[0].title,
+        outlet_count=len({item.source_id for item in items}),
+        meanings=tuple(
+            FramingNote(outlet=item.source_name, sentence=_meaning_sentence(item))
+            for item in items
+        ),
+        differ_line=_differ_line(items, divergence_text),
+    )
+
+
+def _mark_lead(blocks: list[StoryBlock]) -> list[StoryBlock]:
+    """Highest corroboration spans the broadsheet; a tie stays with the first block."""
+    if not blocks:
+        return blocks
+    lead_at = max(range(len(blocks)), key=lambda i: (blocks[i].corroboration, -i))
+    return [
+        replace(block, is_lead=True) if i == lead_at else block
+        for i, block in enumerate(blocks)
+    ]
+
+
 def _build_trending(
     articles: list[Article],
     sources: dict[str, Source],
@@ -170,6 +254,7 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
 
     stories_by_id: dict[UUID, Story] = {s.id: s for s in store.list_stories()}
     articles_by_id: dict[UUID, Article] = {a.id: a for a in articles}
+    divergence_text = _strip_md_heading(draft.divergence_md)
 
     blocks: list[StoryBlock] = []
     for story_id in draft.story_ids:
@@ -186,11 +271,12 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         category = _story_category(cluster_arts, sources)
         items = tuple(_headline_item(a, sources) for a in cluster_arts)
         blocks.append(
-            StoryBlock(
+            _story_block(
                 headline=story.title_hint,
                 category=category,
                 corroboration=story.corroboration_score,
                 items=items,
+                divergence_text=divergence_text,
             )
         )
 
@@ -201,13 +287,16 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
             category = _story_category(reporting, sources)
             items = tuple(_headline_item(a, sources) for a in reporting[:12])
             blocks.append(
-                StoryBlock(
+                _story_block(
                     headline="Today's reporting",
                     category=category,
                     corroboration=0.0,
                     items=items,
+                    divergence_text=divergence_text,
                 )
             )
+
+    blocks = _mark_lead(blocks)
 
     by_cat: dict[str, list[StoryBlock]] = defaultdict(list)
     for block in blocks:
@@ -230,7 +319,7 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
     return DigestView(
         edition_label=edition,
         sections=tuple(sections),
-        divergence_text=_strip_md_heading(draft.divergence_md),
+        divergence_text=divergence_text,
         events=tuple(draft.events),
         perspectives=tuple(draft.perspectives),
         trending=trending,

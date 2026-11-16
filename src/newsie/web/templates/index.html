@@ -63,38 +63,64 @@
       </aside>
 
       <div class="folio">
-        {% if draft and edition.sections %}
-        {% for section in edition.sections %}
-        <section class="category-block">
-          <h2 class="category-head">{{ section.title }}</h2>
-          {% for story in section.stories %}
-          <article class="story">
-            <h3 class="story-head">{{ story.headline }}</h3>
-            <ul class="story-briefs">
-              {% for item in story.items %}
-              <li class="brief">
-                <a class="brief-title" href="{{ item.url }}" rel="noopener noreferrer">{{ item.title }}</a>
-                <span class="brief-attr">{{ item.source_name }}</span>
-              </li>
-              {% endfor %}
-            </ul>
-            <details class="story-details">
-              <summary>Cluster metadata</summary>
-              <dl class="mini-meta">
-                <dt>Corroboration</dt>
-                <dd>{{ "%.2f"|format(story.corroboration) }}</dd>
-                <dt>Sources in cluster</dt>
-                <dd>
+        {% macro story_card(story) %}
+        <article class="flip-card{% if story.is_lead %} is-lead{% endif %}" data-flip-card aria-pressed="false">
+          <div class="flip-scene">
+            <div class="flip-inner">
+              <div class="flip-face flip-front">
+                <button type="button" class="flip-toggle" aria-pressed="false" aria-label="Flip for sources: {{ story.headline }}">
+                  <span class="card-kicker">{{ story.category }}</span>
+                  <span class="card-headline">{{ story.headline }}</span>
+                  <span class="card-dek">{{ story.dek }}</span>
+                  <span class="card-foot">
+                    <span class="outlet-count">{{ story.outlet_count }} {% if story.outlet_count == 1 %}outlet{% else %}outlets{% endif %}</span>
+                    <span class="flip-cue">Flip for sources</span>
+                  </span>
+                </button>
+              </div>
+              <div class="flip-face flip-back" inert aria-hidden="true">
+                <p class="verso">verso</p>
+                <button type="button" class="flip-close" aria-pressed="false">Show headline</button>
+                <h3 class="back-head">Sources</h3>
+                <ul class="source-list">
                   {% for item in story.items %}
-                  <span class="tag">{{ item.source_name }}{% if item.spectrum_tags %} ({% for t in item.spectrum_tags %}{{ t }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</span>
+                  <li>
+                    <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.source_name }}</a>
+                    {% if item.spectrum_tags %}
+                    <span class="tag-line">
+                      {% for tag in item.spectrum_tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+                    </span>
+                    {% endif %}
+                    <span class="source-title">{{ item.title }}</span>
+                  </li>
                   {% endfor %}
-                </dd>
-              </dl>
-            </details>
-          </article>
+                </ul>
+                <h3 class="back-head">What the opinion means</h3>
+                <ul class="meaning-list">
+                  {% for note in story.meanings %}
+                  <li>{{ note.sentence }}</li>
+                  {% endfor %}
+                </ul>
+                <h3 class="back-head">How it differs</h3>
+                <p class="differ-line">{{ story.differ_line }}</p>
+              </div>
+            </div>
+          </div>
+        </article>
+        {% endmacro %}
+        {% if draft and edition.sections %}
+        <div class="broadsheet">
+          {% for section in edition.sections %}
+            {% for story in section.stories if story.is_lead %}
+              {{ story_card(story) }}
+            {% endfor %}
           {% endfor %}
-        </section>
-        {% endfor %}
+          {% for section in edition.sections %}
+            {% for story in section.stories if not story.is_lead %}
+              {{ story_card(story) }}
+            {% endfor %}
+          {% endfor %}
+        </div>
 
         <section class="category-block accent diverge">
           <h2 class="category-head">How outlets differ</h2>
@@ -174,5 +200,6 @@
       Phase 2 reader UI · production path remains Railway workers, Supabase, Telegram HITL.
     </footer>
   </div>
+  <script src="/static/flip.js"></script>
 </body>
 </html>
