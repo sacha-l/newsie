@@ -43,8 +43,13 @@ def cluster_articles(
     stories: list[Story] = []
     assigned: set[UUID] = set()
 
+    def _aware(dt: datetime | None) -> datetime:
+        if dt is None:
+            return now
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
     # Stable order for determinism
-    ordered = sorted(articles, key=lambda a: (a.published_at or now, a.content_hash))
+    ordered = sorted(articles, key=lambda a: (_aware(a.published_at), a.content_hash))
 
     for article in ordered:
         guard.tick()

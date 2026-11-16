@@ -1,4 +1,4 @@
-"""Newsie Phase 1 web UI — fixture digest demo with HITL controls."""
+"""Newsie web UI — fixture demo + live RSS fetch with HITL controls."""
 
 from __future__ import annotations
 
@@ -10,13 +10,14 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from newsie.cli import build_demo_pipeline, build_live_pipeline
 from newsie.hitl import HitlError, approve_draft, reject_draft
 from newsie.web.session import DemoSession, registry
 
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
-app = FastAPI(title="Newsie", version="0.1.0")
+app = FastAPI(title="Newsie", version="0.2.0")
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 COOKIE = "newsie_sid"
@@ -41,7 +42,8 @@ def _ctx(request: Request, sess: DemoSession, **extra: Any) -> dict[str, Any]:
         "publication": pub,
         "story_count": len(stories),
         "article_count": len(sess.store.list_articles()),
-        "sample_banner": True,
+        "sample_banner": sess.mode != "live",
+        "mode": sess.mode,
         **extra,
     }
 
@@ -59,29 +61,33 @@ async def home(request: Request) -> HTMLResponse:
 
 
 @app.post("/run", response_class=HTMLResponse)
-async def run_demo(request: Request) -> HTMLResponse:
+async def run_demo(request: Request, mode: str = Form("demo")) -> HTMLResponse:
     sess = _session(request)
     sess.messages = []
-    # Fresh pipeline store each run for clean demo
-    from newsie.cli import build_demo_pipeline
-
-    pipeline, store = build_demo_pipeline()
+    sess.publication_id = None
+    sess.mode = "live" if mode == "live" else "demo"
+    if sess.mode == "live":
+        pipeline, store = build_live_pipeline()
+    else:
+        pipeline, store = build_demo_pipeline()
     sess.pipeline = pipeline
     sess.store = store
-    sess.publication_id = None
     result = pipeline.run()
     sess.last_status = result.run.status
+    notes = list(result.fetch_errors)
     if result.errors:
-        sess.messages = result.errors
+        sess.messages = result.errors + notes
         sess.draft_id = None
     elif result.draft is None:
-        sess.messages = ["No draft produced"]
+        sess.messages = ["No draft produced"] + notes
         sess.draft_id = None
     else:
         sess.draft_id = result.draft.id
         sess.messages = [
+            f"Mode={sess.mode}",
             f"Ingested {result.articles_ingested} articles → {result.stories} stories",
             f"Validation: {result.draft.validation_status}",
+            *notes[:8],
         ]
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
     _set_cookie(resp, sess.id)
@@ -99,7 +105,7 @@ async def approve(request: Request) -> HTMLResponse:
             pub = approve_draft(sess.store, sess.draft_id, kill_switch=sess.pipeline.kill_switch)
             sess.publication_id = pub.id
             sess.last_status = "published"
-            sess.messages = [f"Published (demo) {pub.id}"]
+            sess.messages = [f"Published (demo HITL) {pub.id}"]
         except HitlError as exc:
             sess.messages = [str(exc)]
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))

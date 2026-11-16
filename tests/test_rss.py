@@ -20,7 +20,7 @@ SAMPLE_FEED = """<?xml version="1.0"?>
 
 
 def test_rss_adapter_parses_feed() -> None:
-    adapter = RssAdapter(fetch_text=lambda _url: SAMPLE_FEED)
+    adapter = RssAdapter(fetch_text_fn=lambda _url: SAMPLE_FEED)
     source = Source(
         id="t",
         name="T",
