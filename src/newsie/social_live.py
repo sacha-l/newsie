@@ -19,7 +19,8 @@ import httpx
 from newsie.domain import SocialPost
 
 BERLIN = ZoneInfo("Europe/Berlin")
-MAX_CALLS = 3
+MAX_CALLS = 4
+_BSKY_HOSTS = ("https://api.bsky.app", "https://public.api.bsky.app")
 MAX_POSTS = 40
 MAX_SHOWN = 8
 _WINDOWS: tuple[tuple[str, str, int], ...] = (
@@ -200,16 +201,23 @@ def fetch_social(
         if calls < MAX_CALLS:
             query = quote(" ".join(tags))
             since = quote((moment - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"))
-            url = (
-                "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
-                f"?q={query}&sort=latest&since={since}&limit={MAX_POSTS}"
-            )
-            calls += 1
-            payload, note = _get_json(http, url)
-            if note:
-                notes.append(note)
-            elif payload is not None:
-                rows.extend(posts_from_bsky(payload, tag=" ".join(tags), retrieved_at=moment))
+            failures: list[str] = []
+            for host in _BSKY_HOSTS:
+                if calls >= MAX_CALLS:
+                    break
+                calls += 1
+                url = (
+                    f"{host}/xrpc/app.bsky.feed.searchPosts"
+                    f"?q={query}&sort=latest&since={since}&limit={MAX_POSTS}"
+                )
+                payload, note = _get_json(http, url)
+                if payload is not None and not note:
+                    rows.extend(posts_from_bsky(payload, tag=" ".join(tags), retrieved_at=moment))
+                    failures.clear()
+                    break
+                if note:
+                    failures.append(note)
+            notes.extend(failures)
     finally:
         if owns:
             http.close()

@@ -115,6 +115,40 @@ def test_windows_keep_posts_inside_each_span(monkeypatch) -> None:
     assert "alt" not in " ".join(post.text for post in brief.posts)
 
 
+def test_bsky_search_uses_the_host_that_answers(monkeypatch) -> None:
+    seen: list[str] = []
+
+    def fake_get(http, url: str):  # type: ignore[no-untyped-def]
+        seen.append(url)
+        if "mastodon" in url:
+            return [], ""
+        if url.startswith("https://api.bsky.app/"):
+            return (
+                {
+                    "posts": [
+                        {
+                            "uri": "at://did/app.bsky.feed.post/abc",
+                            "indexedAt": "2026-11-17T01:02:00.000Z",
+                            "author": {"handle": "desk.bsky.social"},
+                            "record": {"text": "Berlin rent row"},
+                        }
+                    ]
+                },
+                "",
+            )
+        return None, "public.api.bsky.app returned HTTP 403"
+
+    monkeypatch.setattr("newsie.social_live._get_json", fake_get)
+    brief = fetch_social(
+        ["Berlin rent"],
+        now=datetime(2026, 11, 17, 1, 5, tzinfo=UTC),
+    )
+    assert any(url.startswith("https://api.bsky.app/") for url in seen)
+    assert not any(url.startswith("https://public.api.bsky.app/") for url in seen)
+    assert any(post.platform == "bluesky" for post in brief.posts)
+    assert brief.notes == ()
+
+
 def test_bsky_record_becomes_a_post() -> None:
     rows = posts_from_bsky(
         {
