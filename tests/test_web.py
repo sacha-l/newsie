@@ -26,14 +26,17 @@ def test_run_approve_flow() -> None:
     assert "Published" in r2.text or "published" in r2.text.lower()
 
 
-def test_run_html_has_flip_card() -> None:
+def test_run_html_scans_then_lists_articles() -> None:
     r = client.post("/run")
     assert r.status_code == 200
-    assert 'class="flip-toggle"' in r.text
-    assert "Flip for sources" in r.text
-    assert ">Sources<" in r.text
-    assert "Headlines in this sample" in r.text
-    assert "How it differs" in r.text
+    assert "At a glance" in r.text
+    assert "All articles" in r.text
+    assert "Only one origin" in r.text
+    assert 'class="tip-box"' in r.text
+    assert 'data-group="' in r.text
+    glance = r.text.find("At a glance")
+    articles = r.text.find("All articles")
+    assert 0 <= glance < articles
 
 
 def test_event_board_describes_the_collected_sample() -> None:

@@ -20,6 +20,40 @@ CATEGORY_ORDER = (
 )
 
 
+_PARTIES: dict[str, tuple[str, str]] = {
+    "cdu": ("cdu", "CDU"),
+    "csu": ("csu", "CSU"),
+    "spd": ("spd", "SPD"),
+    "gruene": ("greens", "Greens"),
+    "fdp": ("fdp", "FDP"),
+    "linke": ("linke", "Left party"),
+    "afd": ("afd", "AfD"),
+    "bsw": ("bsw", "BSW"),
+}
+_GROUPS: dict[str, tuple[str, str]] = {
+    "left": ("left", "Left"),
+    "centre-left": ("centre-left", "Centre-left"),
+    "centre": ("centre", "Centre"),
+    "centre-right": ("centre-right", "Centre-right"),
+    "right": ("right", "Right"),
+    "regional": ("regional", "Regional"),
+    "official": ("official", "Official"),
+    "party": ("party", "Party"),
+}
+
+
+def source_group(source_id: str, tags: tuple[str, ...]) -> tuple[str, str]:
+    """Slug and label for the color. A party feed wins over a broad left/right tag."""
+    party = _PARTIES.get(source_id)
+    if party is not None:
+        return party
+    for tag in tags:
+        grouped = _GROUPS.get(tag)
+        if grouped is not None:
+            return grouped
+    return ("centre", "Centre")
+
+
 @dataclass(frozen=True)
 class HeadlineItem:
     title: str
@@ -28,6 +62,8 @@ class HeadlineItem:
     source_name: str
     spectrum_tags: tuple[str, ...] = ()
     spectrum_basis: str = ""
+    group_slug: str = "centre"
+    group_label: str = "Centre"
 
 
 @dataclass(frozen=True)
@@ -52,6 +88,13 @@ class StoryBlock:
     differ_line: str
     is_lead: bool = False
     attention_marker: str = ""
+    group_slug: str = "centre"
+    group_label: str = "Centre"
+    group_labels: tuple[str, ...] = ()
+    opinions_differ: bool = False
+    coverage: str = "shared"
+    group_note: str = ""
+    coverage_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -124,13 +167,17 @@ def _edition_label_fallback() -> str:
 
 def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
     src = sources.get(art.source_id)
+    tags = tuple(src.spectrum_tags) if src else ()
+    slug, label = source_group(art.source_id, tags)
     return HeadlineItem(
         title=art.title,
         url=art.url,
         source_id=art.source_id,
         source_name=src.name if src else art.source_id,
-        spectrum_tags=tuple(src.spectrum_tags) if src else (),
+        spectrum_tags=tags,
         spectrum_basis=src.spectrum_basis if src else "",
+        group_slug=slug,
+        group_label=label,
     )
 
 
@@ -152,6 +199,20 @@ def _differ_line(items: tuple[HeadlineItem, ...], divergence_text: str) -> str:
     return "This story is single-sourced. See how outlets differ in the edition divergence note."
 
 
+def _coverage(origins: int) -> tuple[str, str]:
+    if origins <= 1:
+        return (
+            "unique",
+            "Only one independent origin in this collected sample carried this.",
+        )
+    if origins == 2:
+        return (
+            "few",
+            "Fewer origins than a widely shared story: two in this sample.",
+        )
+    return ("shared", f"{origins} independent origins in this sample.")
+
+
 def _story_block(
     *,
     headline: str,
@@ -161,10 +222,34 @@ def _story_block(
     divergence_text: str,
     attention_marker: str = "",
 ) -> StoryBlock:
+    labels = tuple(dict.fromkeys(item.group_label for item in items))
+    slugs = tuple(dict.fromkeys(item.group_slug for item in items))
+    titles = {item.title for item in items}
+    opinions_differ = len(slugs) > 1 or len(titles) > 1
+    if len(slugs) > 1:
+        group_slug = "mixed"
+        group_label = "Mixed"
+        group_note = (
+            "Opinions differ. Groups in this sample: "
+            f"{', '.join(labels)}. The color marks those groups, not a winner."
+        )
+    elif opinions_differ:
+        group_slug = slugs[0] if slugs else "centre"
+        group_label = labels[0] if labels else "Centre"
+        group_note = "Opinions differ. The headlines do not say the same thing."
+    else:
+        group_slug = slugs[0] if slugs else "centre"
+        group_label = labels[0] if labels else "Centre"
+        group_note = (
+            f"{group_label} is the group on file for this publisher. "
+            "The color is not a score of the article."
+        )
+    origins = int(corroboration) if corroboration else len({item.source_id for item in items})
+    coverage, coverage_note = _coverage(origins)
     return StoryBlock(
         headline=headline,
         category=category,
-        corroboration=corroboration,
+        corroboration=float(origins),
         items=items,
         dek=items[0].title,
         outlet_count=len({item.source_id for item in items}),
@@ -172,13 +257,18 @@ def _story_block(
             FramingNote(outlet=item.source_name, sentence=_meaning_sentence(item)) for item in items
         ),
         differ_line=_differ_line(items, divergence_text),
-        independent_origins=int(corroboration),
+        independent_origins=origins,
         evidence_label=(
-            f"{int(corroboration)} independent origin"
-            if int(corroboration) == 1
-            else f"{int(corroboration)} independent origins"
+            f"{origins} independent origin" if origins == 1 else f"{origins} independent origins"
         ),
         attention_marker=attention_marker,
+        group_slug=group_slug,
+        group_label=group_label,
+        group_labels=labels,
+        opinions_differ=opinions_differ,
+        coverage=coverage,
+        group_note=group_note,
+        coverage_note=coverage_note,
     )
 
 

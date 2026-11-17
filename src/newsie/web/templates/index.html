@@ -16,7 +16,7 @@
       <p class="kicker">{{ edition.edition_label }}</p>
       <h1 class="masthead-title">Newsie</h1>
       <p class="masthead-deck">An event desk for German and Berlin political news. Compare reports of the same event, then approve what is published.</p>
-      <p class="how">Newsie groups articles that describe the same occurrence, then separates what is known, what is only claimed, where accounts differ, and what is still unclear. It counts independent origins once when several outlets repeat the same report. A sentence stays in the edition only when a quoted passage supports it. Nothing is published until you approve it.</p>
+      <p class="how">Read the colored summaries first. Scroll for every article. It counts independent origins once when several outlets repeat the same report.</p>
       <p class="masthead-links"><a href="/events">Event board</a></p>
       {% if mode == 'corpus' %}
       <p class="sample-chip">Past 30 days of sources</p>
@@ -68,61 +68,99 @@
       </aside>
 
       <div class="folio">
-        {% macro story_card(story) %}
-        <article class="flip-card{% if story.is_lead %} is-lead{% endif %}" data-flip-card aria-pressed="false">
-          <div class="flip-scene">
-            <div class="flip-inner">
-              <div class="flip-face flip-front">
-                <button type="button" class="flip-toggle" aria-pressed="false" aria-label="Flip for sources: {{ story.headline }}">
-                  <span class="card-kicker">{{ story.category }}</span>
-                  <span class="card-headline">{{ story.headline }}</span>
-                  <span class="card-dek">{{ story.dek }}</span>
-                  <span class="card-foot">
-                    <span class="outlet-count">{{ story.evidence_label }}</span>
-                    {% if story.attention_marker %}<span class="tag">{{ story.attention_marker }}</span>{% endif %}
-                    <span class="flip-cue">Flip for sources</span>
-                  </span>
-                </button>
-              </div>
-              <div class="flip-face flip-back" inert aria-hidden="true">
-                <p class="verso">verso</p>
-                <button type="button" class="flip-close" aria-pressed="false">Show headline</button>
-                <h3 class="back-head">Sources</h3>
-                <ul class="source-list">
-                  {% for item in story.items %}
-                  <li>
-                    <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.source_name }}</a>
-                    <span class="source-title">{{ item.title }}</span>
-                  </li>
-                  {% endfor %}
-                </ul>
-                <h3 class="back-head">Headlines in this sample</h3>
-                <ul class="meaning-list">
-                  {% for note in story.meanings %}
-                  <li>{{ note.sentence }}</li>
-                  {% endfor %}
-                </ul>
-                <h3 class="back-head">How it differs</h3>
-                <p class="differ-line">{{ story.differ_line }}</p>
-              </div>
-            </div>
-          </div>
-        </article>
-        {% endmacro %}
         {% if draft and edition.sections %}
-        <div class="broadsheet">
+        <section class="scan" aria-label="Summary">
+          <h2 class="scan-title">At a glance</h2>
+          <p class="how-read">Color is the party or opinion group on file. A marked row is where those groups disagree, or where only one origin — or fewer origins — carried the story.</p>
+          <ul class="legend">
+            <li><span class="swatch" data-group="left"></span> Left</li>
+            <li><span class="swatch" data-group="centre-left"></span> Centre-left</li>
+            <li><span class="swatch" data-group="centre"></span> Centre</li>
+            <li><span class="swatch" data-group="centre-right"></span> Centre-right</li>
+            <li><span class="swatch" data-group="regional"></span> Regional</li>
+            <li><span class="swatch" data-group="official"></span> Official</li>
+            <li><span class="swatch" data-group="spd"></span> SPD</li>
+            <li><span class="swatch" data-group="cdu"></span> CDU</li>
+            <li><span class="swatch" data-group="greens"></span> Greens</li>
+            <li><span class="swatch" data-group="fdp"></span> FDP</li>
+            <li><span class="swatch" data-group="afd"></span> AfD</li>
+            <li><span class="swatch" data-group="linke"></span> Left party</li>
+            <li><span class="swatch" data-group="mixed"></span> Mixed</li>
+          </ul>
+          <ol class="scan-list">
+            {% for section in edition.sections %}
+              {% for story in section.stories %}
+              <li class="scan-row{% if story.opinions_differ %} is-differ{% endif %}{% if story.coverage != 'shared' %} is-{{ story.coverage }}{% endif %}" data-group="{{ story.group_slug }}">
+                <a class="scan-link" href="#event-{{ section.title | replace(' ', '-') }}-{{ loop.index }}">
+                  <span class="swatch" data-group="{{ story.group_slug }}"></span>
+                  <span class="scan-headline">{{ story.headline }}</span>
+                </a>
+                <span class="scan-badges">
+                  <span class="tip" tabindex="0">
+                    <span class="badge">{{ story.group_label }}</span>
+                    <span class="tip-box" role="tooltip">{{ story.group_note }}</span>
+                  </span>
+                  {% if story.opinions_differ %}
+                  <span class="tip" tabindex="0">
+                    <span class="badge badge-differ">Opinions differ</span>
+                    <span class="tip-box" role="tooltip">{{ story.group_note }}</span>
+                  </span>
+                  {% endif %}
+                  {% if story.coverage == 'unique' %}
+                  <span class="tip" tabindex="0">
+                    <span class="badge badge-unique">Only one origin</span>
+                    <span class="tip-box" role="tooltip">{{ story.coverage_note }}</span>
+                  </span>
+                  {% elif story.coverage == 'few' %}
+                  <span class="tip" tabindex="0">
+                    <span class="badge badge-few">Fewer sources</span>
+                    <span class="tip-box" role="tooltip">{{ story.coverage_note }}</span>
+                  </span>
+                  {% endif %}
+                </span>
+              </li>
+              {% endfor %}
+            {% endfor %}
+          </ol>
+        </section>
+
+        <section class="article-scroll" aria-label="Articles">
+          <h2 class="scan-title">All articles</h2>
           <p class="prose">{{ edition.evidence_note }}</p>
           {% for section in edition.sections %}
-            {% for story in section.stories if story.is_lead %}
-              {{ story_card(story) }}
+            {% for story in section.stories %}
+            <article class="article-block{% if story.opinions_differ %} is-differ{% endif %}{% if story.coverage != 'shared' %} is-{{ story.coverage }}{% endif %}" id="event-{{ section.title | replace(' ', '-') }}-{{ loop.index }}" data-group="{{ story.group_slug }}">
+              <h3>{{ story.headline }}</h3>
+              <p class="article-flags">
+                <span class="tip" tabindex="0">
+                  <span class="swatch" data-group="{{ story.group_slug }}"></span>
+                  {{ story.group_label }}
+                  <span class="tip-box" role="tooltip">{{ story.group_note }}</span>
+                </span>
+                {% if story.opinions_differ %}<span class="badge badge-differ">Opinions differ</span>{% endif %}
+                {% if story.coverage == 'unique' %}<span class="badge badge-unique">Only one origin</span>{% endif %}
+                {% if story.coverage == 'few' %}<span class="badge badge-few">Fewer sources</span>{% endif %}
+                <span class="badge">{{ story.evidence_label }}</span>
+              </p>
+              <ul class="article-list">
+                {% for item in story.items %}
+                <li data-group="{{ item.group_slug }}">
+                  <span class="tip" tabindex="0">
+                    <span class="swatch" data-group="{{ item.group_slug }}"></span>
+                    {{ item.source_name }}
+                    <span class="tip-box" role="tooltip">{{ item.group_label }}. {{ item.spectrum_basis or story.group_note }}</span>
+                  </span>
+                  <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.title }}</a>
+                </li>
+                {% endfor %}
+              </ul>
+              {% if story.opinions_differ %}
+              <p class="differ-line">{{ story.differ_line }}</p>
+              {% endif %}
+            </article>
             {% endfor %}
           {% endfor %}
-          {% for section in edition.sections %}
-            {% for story in section.stories if not story.is_lead %}
-              {{ story_card(story) }}
-            {% endfor %}
-          {% endfor %}
-        </div>
+        </section>
 
         <section class="category-block accent diverge">
           <h2 class="category-head">How outlets differ</h2>

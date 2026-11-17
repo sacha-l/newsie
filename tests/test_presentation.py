@@ -31,6 +31,9 @@ def test_build_digest_view_has_sections_and_trending() -> None:
         assert card.meanings
         assert len(card.meanings) == len(card.items)
         assert card.differ_line
+        if len(card.items) == 1:
+            assert card.coverage == "unique"
+            assert card.group_note
         if len(card.items) >= 2:
             assert card.items[0].source_name in card.differ_line
             assert card.items[0].title in card.differ_line
@@ -77,3 +80,8 @@ def test_corroborated_card_has_sources_meaning_and_differ_line() -> None:
     assert left.title in card.differ_line
     assert right.title in card.differ_line
     assert "single-sourced" not in card.differ_line
+    assert card.opinions_differ
+    assert card.group_slug == "mixed"
+    assert "Centre" in card.group_labels
+    assert "Regional" in card.group_labels
+    assert card.coverage == "few"
