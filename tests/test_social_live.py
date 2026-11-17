@@ -149,6 +149,43 @@ def test_bsky_search_uses_the_host_that_answers(monkeypatch) -> None:
     assert brief.notes == ()
 
 
+def test_a_busy_mastodon_feed_does_not_hide_bluesky(monkeypatch) -> None:
+    now = datetime(2026, 11, 17, 12, 0, tzinfo=UTC)
+
+    def mastodon_row(post_id: int) -> dict[str, object]:
+        when = now - timedelta(minutes=post_id)
+        return {
+            "id": str(post_id),
+            "content": f"<p>Berlin post {post_id}</p>",
+            "url": f"https://mastodon.de/@a/{post_id}",
+            "created_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "account": {"acct": "a"},
+        }
+
+    def fake_get(http, url: str):  # type: ignore[no-untyped-def]
+        if "mastodon" in url and "berlin" in url:
+            return [mastodon_row(i) for i in range(1, 12)], ""
+        if "mastodon" in url:
+            return [], ""
+        return (
+            {
+                "posts": [
+                    {
+                        "uri": "at://did/app.bsky.feed.post/abc",
+                        "indexedAt": (now - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "author": {"handle": "desk.bsky.social"},
+                        "record": {"text": "Berlin on Bluesky"},
+                    }
+                ]
+            },
+            "",
+        )
+
+    monkeypatch.setattr("newsie.social_live._get_json", fake_get)
+    brief = fetch_social(["Berlin"], now=now)
+    assert any(post.platform == "bluesky" for post in brief.posts)
+
+
 def test_bsky_record_becomes_a_post() -> None:
     rows = posts_from_bsky(
         {

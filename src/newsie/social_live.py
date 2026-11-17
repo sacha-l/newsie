@@ -259,7 +259,7 @@ def _window(
     fresh: list[tuple[SocialPost, str, timedelta]],
 ) -> SocialWindow:
     chosen = [(post, url) for post, url, age in fresh if age <= timedelta(hours=hours)]
-    cards = tuple(_card(post, url) for post, url in chosen[:MAX_SHOWN])
+    cards = tuple(_card(post, url) for post, url in _mix_platforms(chosen)[:MAX_SHOWN])
     return SocialWindow(
         key=key,
         label=label,
@@ -267,6 +267,21 @@ def _window(
         posts=cards,
         total=len(chosen),
     )
+
+
+def _mix_platforms(
+    chosen: list[tuple[SocialPost, str]],
+) -> list[tuple[SocialPost, str]]:
+    """Alternate platforms so one busy feed does not hide the other."""
+    grouped: dict[str, list[tuple[SocialPost, str]]] = {}
+    for item in chosen:
+        grouped.setdefault(item[0].platform, []).append(item)
+    mixed: list[tuple[SocialPost, str]] = []
+    while len(mixed) < len(chosen):
+        for bucket in grouped.values():
+            if bucket:
+                mixed.append(bucket.pop(0))
+    return mixed
 
 
 def _card(post: SocialPost, url: str) -> SocialCard:
