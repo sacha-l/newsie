@@ -71,7 +71,13 @@
         {% if draft and edition.sections %}
         <section class="scan" aria-label="Summary">
           <h2 class="scan-title">At a glance</h2>
-          <p class="how-read">Color is the party or opinion group on file. A marked row is where those groups disagree, or where only one origin — or fewer origins — carried the story.</p>
+          <div class="glance-brief">
+            <p>{{ edition.glance_general }}</p>
+            <p>{{ edition.glance_disagreement }}</p>
+            <p>{{ edition.glance_implication }}</p>
+            <p class="glance-how"><span class="tip" tabindex="0">How this was generated<span class="tip-box" role="tooltip">{{ edition.glance_how }}</span></span> {{ edition.glance_how }}</p>
+          </div>
+          <p class="how-read">Color is the party or opinion group on file. Headlines are in English. A marked row is where groups disagree, or where only one origin — or fewer origins — carried the story.</p>
           <ul class="legend">
             <li><span class="swatch" data-group="left"></span> Left</li>
             <li><span class="swatch" data-group="centre-left"></span> Centre-left</li>
@@ -96,6 +102,12 @@
                   <span class="scan-headline">{{ story.headline }}</span>
                 </a>
                 <span class="scan-badges">
+                  {% if story.original_headline and story.original_headline != story.headline %}
+                  <span class="tip" tabindex="0">
+                    <span class="badge">Original</span>
+                    <span class="tip-box" role="tooltip">{{ story.original_headline }}</span>
+                  </span>
+                  {% endif %}
                   <span class="tip" tabindex="0">
                     <span class="badge">{{ story.group_label }}</span>
                     <span class="tip-box" role="tooltip">{{ story.group_note }}</span>

@@ -10,6 +10,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from newsie.domain import Article, DigestDraft, PerspectiveBrief, PoliticalEvent, Source, Story
+from newsie.english import english_headline, glance_brief
 from newsie.signals import least_sure
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -64,6 +65,7 @@ class HeadlineItem:
     spectrum_basis: str = ""
     group_slug: str = "centre"
     group_label: str = "Centre"
+    original_title: str = ""
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,7 @@ class StoryBlock:
     coverage: str = "shared"
     group_note: str = ""
     coverage_note: str = ""
+    original_headline: str = ""
 
 
 @dataclass(frozen=True)
@@ -127,6 +130,10 @@ class DigestView:
     validation_status: str | None
     evidence_note: str = "Labels describe how widely something is reported, not whether it is true."
     review_queue: tuple[str, ...] = ()
+    glance_general: str = ""
+    glance_disagreement: str = ""
+    glance_implication: str = ""
+    glance_how: str = ""
 
 
 def _sources_map(store: Any) -> dict[str, Source]:
@@ -169,8 +176,9 @@ def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
     src = sources.get(art.source_id)
     tags = tuple(src.spectrum_tags) if src else ()
     slug, label = source_group(art.source_id, tags)
+    shown = english_headline(art.title)
     return HeadlineItem(
-        title=art.title,
+        title=shown,
         url=art.url,
         source_id=art.source_id,
         source_name=src.name if src else art.source_id,
@@ -178,6 +186,7 @@ def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
         spectrum_basis=src.spectrum_basis if src else "",
         group_slug=slug,
         group_label=label,
+        original_title=art.title,
     )
 
 
@@ -246,8 +255,9 @@ def _story_block(
         )
     origins = int(corroboration) if corroboration else len({item.source_id for item in items})
     coverage, coverage_note = _coverage(origins)
+    shown = english_headline(headline)
     return StoryBlock(
-        headline=headline,
+        headline=shown,
         category=category,
         corroboration=float(origins),
         items=items,
@@ -269,6 +279,7 @@ def _story_block(
         coverage=coverage,
         group_note=group_note,
         coverage_note=coverage_note,
+        original_headline=headline,
     )
 
 
@@ -387,6 +398,12 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
             )
 
     blocks = _mark_lead(blocks)
+    general, disagreement, implication, how = glance_brief(
+        [
+            (block.headline, block.group_label, block.opinions_differ, block.coverage)
+            for block in blocks
+        ]
+    )
 
     by_cat: dict[str, list[StoryBlock]] = defaultdict(list)
     for block in blocks:
@@ -411,6 +428,10 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         trending=trending,
         validation_status=draft.validation_status,
         review_queue=_review_queue(store),
+        glance_general=general,
+        glance_disagreement=disagreement,
+        glance_implication=implication,
+        glance_how=how,
     )
 
 

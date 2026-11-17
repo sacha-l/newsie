@@ -24,7 +24,8 @@ def test_build_digest_view_has_sections_and_trending() -> None:
     assert len(leads) == 1
     assert leads[0].corroboration == max(card.corroboration for card in cards)
     by_id = {story.id: story for story in store.list_stories()}
-    assert leads[0].headline == by_id[result.draft.story_ids[0]].title_hint
+    assert leads[0].original_headline == by_id[result.draft.story_ids[0]].title_hint
+    assert leads[0].headline != leads[0].original_headline
     for card in cards:
         assert card.items
         assert card.dek
@@ -69,7 +70,8 @@ def test_corroborated_card_has_sources_meaning_and_differ_line() -> None:
     assert card.is_lead
     assert len(card.items) >= 2
     assert card.outlet_count >= 2
-    assert card.dek == left.title
+    assert card.original_headline == left.title
+    assert "Berlin Senate argues" in card.dek
     assert card.meanings
     joined = " ".join(note.sentence for note in card.meanings)
     assert "Tagesschau headline:" in joined
@@ -77,8 +79,8 @@ def test_corroborated_card_has_sources_meaning_and_differ_line() -> None:
     assert "framing" not in joined
     assert "Tagesschau" in card.differ_line
     assert "rbb" in card.differ_line
-    assert left.title in card.differ_line
-    assert right.title in card.differ_line
+    assert "Berlin Senate argues" in card.differ_line
+    assert "Rent dispute in Berlin" in card.differ_line
     assert "single-sourced" not in card.differ_line
     assert card.opinions_differ
     assert card.group_slug == "mixed"

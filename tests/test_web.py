@@ -14,6 +14,9 @@ def test_home_ok() -> None:
     assert "independent origins" in r.text
     assert "Sources today" in r.text
     assert "Past 30 days of sources" in r.text or "Sample edition" in r.text
+    assert "How this was generated" in r.text
+    assert "What this might imply" in r.text
+    assert "Twelve district newsletters" in r.text
 
 
 def test_run_approve_flow() -> None:
@@ -30,6 +33,9 @@ def test_run_html_scans_then_lists_articles() -> None:
     r = client.post("/run")
     assert r.status_code == 200
     assert "At a glance" in r.text
+    assert "How this was generated" in r.text
+    assert "might imply" in r.text or "does not show which account" in r.text
+    assert "Berlin Senate argues" in r.text
     assert "All articles" in r.text
     assert "Only one origin" in r.text
     assert 'class="tip-box"' in r.text
