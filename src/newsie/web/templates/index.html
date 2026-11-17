@@ -13,7 +13,7 @@
   <div class="sheet">
     <header class="masthead">
       <div class="masthead-rule"></div>
-      <p class="kicker">{{ edition.edition_label }}</p>
+      <p class="kicker">{{ edition.fetched_label }}</p>
       <h1 class="masthead-title">Newsie</h1>
       <p class="masthead-deck">An event desk for German and Berlin political news. Compare reports of the same event, then approve what is published.</p>
       <p class="how">Read the colored summaries first. Scroll for every article. It counts independent origins once when several outlets repeat the same report.</p>
@@ -77,6 +77,34 @@
             <p>{{ edition.glance_implication }}</p>
             <p class="glance-how"><span class="tip" tabindex="0">How this was generated<span class="tip-box" role="tooltip">{{ edition.glance_how }}</span></span> {{ edition.glance_how }}</p>
           </div>
+          <section class="social-live" aria-label="Social feeds">
+            <h3>Social feeds</h3>
+            <form method="post" action="/social">
+              <button class="primary" type="submit">Fetch social now</button>
+            </form>
+            <p class="how-read">Public Mastodon and Bluesky posts for the words already on this page. A signal, not evidence.</p>
+            {% if social %}
+            <p>Social last fetched {{ social.fetched_label }}</p>
+            <p>{{ social.summary }}</p>
+            <p class="glance-how">{{ social.how }}</p>
+            <ul class="social-posts">
+              {% for post in social.posts %}
+              <li class="social-post">
+                <p class="social-meta">
+                  {% if post.url %}<a href="{{ post.url }}">{{ post.handle }}</a>{% else %}{{ post.handle }}{% endif %}
+                  · {{ post.platform }} · {{ post.tag }} · {{ post.when_label }}
+                </p>
+                <p>{{ post.text }}</p>
+              </li>
+              {% endfor %}
+            </ul>
+            {% for note in social.notes %}
+            <p class="glance-how">{{ note }}</p>
+            {% endfor %}
+            {% else %}
+            <p class="glance-how">Social feeds have not been fetched in this view.</p>
+            {% endif %}
+          </section>
           <p class="how-read">Color is the party or opinion group on file. Headlines are in English. A marked row is where groups disagree, or where only one origin — or fewer origins — carried the story.</p>
           <ul class="legend">
             <li><span class="swatch" data-group="left"></span> Left</li>

@@ -17,6 +17,8 @@ def test_home_ok() -> None:
     assert "How this was generated" in r.text
     assert "What this might imply" in r.text
     assert "Twelve district newsletters" in r.text
+    assert "Sources last fetched Monday, 16 November 2026, 23:30 Europe/Berlin" in r.text
+    assert "Fetch social now" in r.text
 
 
 def test_run_approve_flow() -> None:
@@ -43,6 +45,36 @@ def test_run_html_scans_then_lists_articles() -> None:
     glance = r.text.find("At a glance")
     articles = r.text.find("All articles")
     assert 0 <= glance < articles
+
+
+def test_social_request_renders_a_summary(monkeypatch) -> None:
+    from newsie.social_live import SocialBrief, SocialCard
+
+    def fake(_texts: list[str]) -> SocialBrief:
+        return SocialBrief(
+            fetched_label="Tuesday, 17 November 2026, 02:12 Europe/Berlin",
+            summary="1 posts fetched on this request (berlin 1). This is not evidence.",
+            how="No model rewrote the posts.",
+            posts=(
+                SocialCard(
+                    handle="desk",
+                    platform="mastodon",
+                    when_label="Tuesday, 17 November 2026, 02:10 Europe/Berlin",
+                    text="Berlin rent argument",
+                    url="https://mastodon.de/@desk/1",
+                    tag="berlin",
+                ),
+            ),
+            notes=(),
+        )
+
+    monkeypatch.setattr("newsie.web.app.fetch_social", fake)
+    page = client.post("/social")
+    assert page.status_code == 200
+    assert "Social last fetched Tuesday, 17 November 2026, 02:12" in page.text
+    assert "Berlin rent argument" in page.text
+    assert "not evidence" in page.text
+    assert "Sources last fetched" in page.text
 
 
 def test_event_board_describes_the_collected_sample() -> None:

@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from newsie.cli import build_demo_pipeline
 from newsie.corpus import corpus_available, load_corpus_edition
 from newsie.pipeline import DigestPipeline
+from newsie.social_live import SocialBrief
 
 
 @dataclass
@@ -22,6 +23,7 @@ class DemoSession:
     last_status: str = "idle"
     messages: list[str] = field(default_factory=list)
     mode: str = "demo"
+    social: SocialBrief | None = None
 
 
 class SessionRegistry:

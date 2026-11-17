@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -134,6 +134,7 @@ class DigestView:
     glance_disagreement: str = ""
     glance_implication: str = ""
     glance_how: str = ""
+    fetched_label: str = ""
 
 
 def _sources_map(store: Any) -> dict[str, Source]:
@@ -160,6 +161,14 @@ def _story_category(articles: list[Article], sources: dict[str, Source]) -> str:
     if "regional" in tags:
         return "Berlin & Brandenburg"
     return "Germany & politics"
+
+
+def _fetched_label(articles: list[Article]) -> str:
+    times = [article.retrieved_at for article in articles]
+    when = max(times) if times else datetime.now(UTC)
+    local = when.astimezone(BERLIN)
+    clock = f"{local:%A,} {local.day} {local:%B %Y}, {local:%H:%M} Europe/Berlin"
+    return f"Sources last fetched {clock}"
 
 
 def _edition_label(when: datetime) -> str:
@@ -432,6 +441,7 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         glance_disagreement=disagreement,
         glance_implication=implication,
         glance_how=how,
+        fetched_label=_fetched_label(articles),
     )
 
 
@@ -458,4 +468,5 @@ def build_sources_only_view(store: Any) -> DigestView:
         perspectives=(),
         trending=_build_trending(articles, sources),
         validation_status=None,
+        fetched_label=_fetched_label(articles),
     )
