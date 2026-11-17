@@ -9,7 +9,7 @@ import html
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote, urlsplit
 from zoneinfo import ZoneInfo
@@ -20,8 +20,13 @@ from newsie.domain import SocialPost
 
 BERLIN = ZoneInfo("Europe/Berlin")
 MAX_CALLS = 3
-MAX_POSTS = 8
-MAX_SHOWN = 10
+MAX_POSTS = 40
+MAX_SHOWN = 8
+_WINDOWS: tuple[tuple[str, str, int], ...] = (
+    ("hour", "Last hour", 1),
+    ("twelve", "Last 12 hours", 12),
+    ("day", "Last 24 hours", 24),
+)
 _TEXT = 240
 
 _TAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -66,9 +71,10 @@ _WORD = re.compile(r"[a-zA-ZäöüÄÖÜß]{4,}")
 
 _HOW = (
     "On request, Newsie read up to two public Mastodon tag feeds and one public "
-    "Bluesky search for words already on this page. HTML was stripped. No model "
-    "rewrote the posts. A post is shown only when the feed returned text. These "
-    "posts do not count toward origins or evidence labels."
+    "Bluesky search for words already on this page. Each feed returns its latest "
+    "40 posts. Last hour, last 12 hours, and last 24 hours are three views of that "
+    "same fetch; posts older than 24 hours are left out. HTML was stripped. No model "
+    "rewrote the posts. These posts do not count toward origins or evidence labels."
 )
 
 
@@ -83,12 +89,22 @@ class SocialCard:
 
 
 @dataclass(frozen=True)
+class SocialWindow:
+    key: str
+    label: str
+    summary: str
+    posts: tuple[SocialCard, ...]
+    total: int
+
+
+@dataclass(frozen=True)
 class SocialBrief:
     fetched_label: str
     summary: str
     how: str
     posts: tuple[SocialCard, ...]
     notes: tuple[str, ...]
+    windows: tuple[SocialWindow, ...] = ()
 
 
 def stamp(when: datetime) -> str:
@@ -183,9 +199,10 @@ def fetch_social(
                 rows.extend(posts_from_mastodon(payload, tag=tag, retrieved_at=moment))
         if calls < MAX_CALLS:
             query = quote(" ".join(tags))
+            since = quote((moment - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"))
             url = (
                 "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
-                f"?q={query}&sort=latest&limit={MAX_POSTS}"
+                f"?q={query}&sort=latest&since={since}&limit={MAX_POSTS}"
             )
             calls += 1
             payload, note = _get_json(http, url)
@@ -201,38 +218,80 @@ def fetch_social(
 
 def _brief(rows: list[tuple[SocialPost, str]], when: datetime, notes: list[str]) -> SocialBrief:
     seen: set[tuple[str, str]] = set()
-    cards: list[SocialCard] = []
-    posts: list[SocialPost] = []
+    fresh: list[tuple[SocialPost, str, timedelta]] = []
+    moment = _aware(when)
     for post, url in rows:
         key = (post.platform, post.external_id)
         if key in seen:
             continue
         seen.add(key)
-        posts.append(post)
-        cards.append(
-            SocialCard(
-                handle=post.author_handle or "unknown",
-                platform=post.platform,
-                when_label=stamp(post.retrieved_at),
-                text=post.text,
-                url=url if url.startswith("https://") else "",
-                tag=post.topic,
-            )
-        )
-        if len(cards) >= MAX_SHOWN:
-            break
+        age = moment - _aware(post.retrieved_at)
+        if age < timedelta(0):
+            age = timedelta(0)
+        if age > timedelta(hours=24):
+            continue
+        fresh.append((post, url, age))
+    fresh.sort(key=lambda item: item[2])
+    windows = tuple(_window(key, label, hours, fresh) for key, label, hours in _WINDOWS)
+    day = windows[-1]
     return SocialBrief(
         fetched_label=stamp(when),
-        summary=_summary(posts),
+        summary=_summary([post for post, _url, _age in fresh], windows),
         how=_HOW,
-        posts=tuple(cards),
+        posts=day.posts,
         notes=tuple(notes),
+        windows=windows,
     )
 
 
-def _summary(posts: list[SocialPost]) -> str:
+def _window(
+    key: str,
+    label: str,
+    hours: int,
+    fresh: list[tuple[SocialPost, str, timedelta]],
+) -> SocialWindow:
+    chosen = [(post, url) for post, url, age in fresh if age <= timedelta(hours=hours)]
+    cards = tuple(_card(post, url) for post, url in chosen[:MAX_SHOWN])
+    return SocialWindow(
+        key=key,
+        label=label,
+        summary=_window_summary(label, [post for post, _url in chosen], shown=len(cards)),
+        posts=cards,
+        total=len(chosen),
+    )
+
+
+def _card(post: SocialPost, url: str) -> SocialCard:
+    return SocialCard(
+        handle=post.author_handle or "unknown",
+        platform=post.platform,
+        when_label=stamp(post.retrieved_at),
+        text=post.text,
+        url=url if url.startswith("https://") else "",
+        tag=post.topic,
+    )
+
+
+def _summary(posts: list[SocialPost], windows: tuple[SocialWindow, ...]) -> str:
     if not posts:
-        return "No public posts came back for this request. Nothing was added to the edition."
+        return (
+            "No public posts from the last 24 hours came back for this request. "
+            "Nothing was added to the edition."
+        )
+    counts = {window.key: window.total for window in windows}
+    noun = "post" if len(posts) == 1 else "posts"
+    return (
+        f"{len(posts)} {noun} from the last 24 hours. "
+        f"{counts.get('hour', 0)} in the last hour, and "
+        f"{counts.get('twelve', 0)} in the last 12 hours. "
+        "This is a social signal from those feeds, not evidence, and it does not "
+        "change the edition."
+    )
+
+
+def _window_summary(label: str, posts: list[SocialPost], *, shown: int) -> str:
+    if not posts:
+        return f"No posts in the {label.lower()} from this fetch."
     counts = Counter(post.topic for post in posts)
     bits = ", ".join(f"{tag} {count}" for tag, count in counts.most_common())
     noun = "post" if len(posts) == 1 else "posts"
@@ -243,11 +302,14 @@ def _summary(posts: list[SocialPost]) -> str:
                 words[word] += 1
     top = [word for word, count in words.most_common(6) if count > 1]
     recurring = f" Words that repeat: {', '.join(top)}." if top else ""
-    return (
-        f"{len(posts)} {noun} fetched on this request ({bits}).{recurring} "
-        "This is a social signal from those feeds, not evidence, and it does not "
-        "change the edition."
-    )
+    hidden = f" Showing {shown} of {len(posts)}." if shown < len(posts) else ""
+    return f"{len(posts)} {noun} in the {label.lower()} ({bits}).{recurring}{hidden}"
+
+
+def _aware(when: datetime) -> datetime:
+    if when.tzinfo is None:
+        return when.replace(tzinfo=UTC)
+    return when
 
 
 def _has_word(blob: str, word: str) -> bool:

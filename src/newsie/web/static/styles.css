@@ -466,6 +466,36 @@ button:disabled {
   font-size: 1.35rem;
   font-weight: 600;
 }
+.social-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0.4rem;
+}
+.social-views a {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--rule-heavy);
+  text-decoration: none;
+  color: var(--ink);
+}
+.social-window { display: none; }
+.social-window.is-default { display: block; }
+.social-switch:has(.social-window:target) .social-window { display: none; }
+.social-switch .social-window:target { display: block; }
+.social-switch:not(:has(.social-window:target)) a[href="#social-hour"],
+.social-switch:has(#social-hour:target) a[href="#social-hour"],
+.social-switch:has(#social-twelve:target) a[href="#social-twelve"],
+.social-switch:has(#social-day:target) a[href="#social-day"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.social-window h4 {
+  margin: 0.4rem 0;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+}
 .social-posts { list-style: none; margin: 0.6rem 0 0; padding: 0; }
 .social-post {
   margin: 0.7rem 0;

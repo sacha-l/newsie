@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from newsie.social_live import (
     fetch_social,
@@ -74,6 +74,45 @@ def test_fetch_social_summarizes_without_calling_the_network(monkeypatch) -> Non
     assert brief.posts[0].handle == "a"
     assert any("403" in note for note in brief.notes)
     assert "No model rewrote" in brief.how
+    assert [window.label for window in brief.windows] == [
+        "Last hour",
+        "Last 12 hours",
+        "Last 24 hours",
+    ]
+    assert all(window.total == 1 for window in brief.windows)
+
+
+def test_windows_keep_posts_inside_each_span(monkeypatch) -> None:
+    now = datetime(2026, 11, 17, 12, 0, tzinfo=UTC)
+
+    def row(post_id: str, when: datetime, text: str) -> dict[str, object]:
+        return {
+            "id": post_id,
+            "content": f"<p>{text}</p>",
+            "url": f"https://mastodon.de/@a/{post_id}",
+            "created_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "account": {"acct": "a"},
+        }
+
+    payload = [
+        row("1", now - timedelta(minutes=20), "Berlin Miete jetzt"),
+        row("2", now - timedelta(hours=6), "Berlin Miete heute"),
+        row("3", now - timedelta(hours=20), "Berlin Miete gestern"),
+        row("4", now - timedelta(hours=30), "Berlin Miete alt"),
+    ]
+
+    def fake_get(http, url: str):  # type: ignore[no-untyped-def]
+        if "mastodon" in url and "miete" in url:
+            return payload, ""
+        if "mastodon" in url:
+            return [], ""
+        return {"posts": []}, ""
+
+    monkeypatch.setattr("newsie.social_live._get_json", fake_get)
+    brief = fetch_social(["rent in Berlin"], now=now)
+    totals = {window.key: window.total for window in brief.windows}
+    assert totals == {"hour": 1, "twelve": 2, "day": 3}
+    assert "alt" not in " ".join(post.text for post in brief.posts)
 
 
 def test_bsky_record_becomes_a_post() -> None:

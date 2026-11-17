@@ -48,30 +48,41 @@ def test_run_html_scans_then_lists_articles() -> None:
 
 
 def test_social_request_renders_a_summary(monkeypatch) -> None:
-    from newsie.social_live import SocialBrief, SocialCard
+    from newsie.social_live import SocialBrief, SocialCard, SocialWindow
+
+    card = SocialCard(
+        handle="desk",
+        platform="mastodon",
+        when_label="Tuesday, 17 November 2026, 02:10 Europe/Berlin",
+        text="Berlin rent argument",
+        url="https://mastodon.de/@desk/1",
+        tag="berlin",
+    )
+
+    def window(key: str, label: str) -> SocialWindow:
+        return SocialWindow(key=key, label=label, summary=label, posts=(card,), total=1)
 
     def fake(_texts: list[str]) -> SocialBrief:
         return SocialBrief(
             fetched_label="Tuesday, 17 November 2026, 02:12 Europe/Berlin",
-            summary="1 posts fetched on this request (berlin 1). This is not evidence.",
+            summary="1 post from the last 24 hours. This is not evidence.",
             how="No model rewrote the posts.",
-            posts=(
-                SocialCard(
-                    handle="desk",
-                    platform="mastodon",
-                    when_label="Tuesday, 17 November 2026, 02:10 Europe/Berlin",
-                    text="Berlin rent argument",
-                    url="https://mastodon.de/@desk/1",
-                    tag="berlin",
-                ),
-            ),
+            posts=(card,),
             notes=(),
+            windows=(
+                window("hour", "Last hour"),
+                window("twelve", "Last 12 hours"),
+                window("day", "Last 24 hours"),
+            ),
         )
 
     monkeypatch.setattr("newsie.web.app.fetch_social", fake)
     page = client.post("/social")
     assert page.status_code == 200
     assert "Social last fetched Tuesday, 17 November 2026, 02:12" in page.text
+    assert "Last hour" in page.text
+    assert "Last 12 hours" in page.text
+    assert "Last 24 hours" in page.text
     assert "Berlin rent argument" in page.text
     assert "not evidence" in page.text
     assert "Sources last fetched" in page.text
