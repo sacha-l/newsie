@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from newsie.domain import Article, DigestDraft, DigestSentence
-from newsie.evidence import passage_supports
+from newsie.domain import Article, DigestDraft, DigestSentence, SupportRelation
+from newsie.evidence import support_relation
 
 
 @dataclass
@@ -27,10 +27,13 @@ def _article_for(url: str, articles: list[Article]) -> Article | None:
     return None
 
 
+_UNCITED = {"note", "unclear", "reporting"}
+
+
 def _check_sentence(
     sentence: DigestSentence, articles: list[Article], errors: list[str]
 ) -> DigestSentence:
-    if sentence.section == "note":
+    if sentence.section in _UNCITED:
         return sentence.model_copy(update={"support_verdict": "unchecked"})
     if not sentence.citations:
         errors.append(f"sentence has no citation: {sentence.text[:80]}")
@@ -46,7 +49,10 @@ def _check_sentence(
             errors.append(f"quote not in article: {citation.url}")
             verdict = "unsupported"
             continue
-        if not passage_supports(sentence.text, citation.quote):
+        relation = support_relation(sentence.text, citation.quote)
+        if relation == SupportRelation.PARTIAL and verdict == "supported":
+            verdict = "partial"
+        elif relation not in {SupportRelation.DIRECT, SupportRelation.PARTIAL}:
             errors.append(f"passage does not support sentence: {sentence.text[:80]}")
             verdict = "unsupported"
     return sentence.model_copy(update={"support_verdict": verdict})

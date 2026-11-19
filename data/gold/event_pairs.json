@@ -1,0 +1,14 @@
+[
+  {
+    "id": "same-rent-cap",
+    "left": "Berlin beschliesst einen Mietenstopp fuer Bestandswohnungen im kommenden Jahr.",
+    "right": "Der Senat beschliesst den Mietenstopp fuer Bestandswohnungen in Berlin.",
+    "same_event": true
+  },
+  {
+    "id": "rent-versus-energy",
+    "left": "Berlin beschliesst einen Mietenstopp fuer Bestandswohnungen im kommenden Jahr.",
+    "right": "Energiepreise und Netzentgelte steigen im kommenden Winter deutlich.",
+    "same_event": false
+  }
+]

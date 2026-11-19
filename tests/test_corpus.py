@@ -39,15 +39,9 @@ def test_month_corpus_replays_clustering_and_labels() -> None:
     replayed = replay_story_sets(payload)
     recorded = recorded_story_sets(payload)
     predicted = {
-        article_id: str(index)
-        for index, group in enumerate(replayed)
-        for article_id in group
+        article_id: str(index) for index, group in enumerate(replayed) for article_id in group
     }
-    gold = {
-        article_id: str(index)
-        for index, group in enumerate(recorded)
-        for article_id in group
-    }
+    gold = {article_id: str(index) for index, group in enumerate(recorded) for article_id in group}
     assert set(predicted) == set(gold)
     precision, recall = bcubed(predicted, gold)
     assert precision == 1.0

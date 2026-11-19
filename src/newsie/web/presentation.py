@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from newsie.domain import Article, DigestDraft, PerspectiveBrief, PoliticalEvent, Source, Story
+from newsie.english import english_headline, glance_brief
 from newsie.signals import least_sure
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -20,6 +21,40 @@ CATEGORY_ORDER = (
 )
 
 
+_PARTIES: dict[str, tuple[str, str]] = {
+    "cdu": ("cdu", "CDU"),
+    "csu": ("csu", "CSU"),
+    "spd": ("spd", "SPD"),
+    "gruene": ("greens", "Greens"),
+    "fdp": ("fdp", "FDP"),
+    "linke": ("linke", "Left party"),
+    "afd": ("afd", "AfD"),
+    "bsw": ("bsw", "BSW"),
+}
+_GROUPS: dict[str, tuple[str, str]] = {
+    "left": ("left", "Left"),
+    "centre-left": ("centre-left", "Centre-left"),
+    "centre": ("centre", "Centre"),
+    "centre-right": ("centre-right", "Centre-right"),
+    "right": ("right", "Right"),
+    "regional": ("regional", "Regional"),
+    "official": ("official", "Official"),
+    "party": ("party", "Party"),
+}
+
+
+def source_group(source_id: str, tags: tuple[str, ...]) -> tuple[str, str]:
+    """Slug and label for the color. A party feed wins over a broad left/right tag."""
+    party = _PARTIES.get(source_id)
+    if party is not None:
+        return party
+    for tag in tags:
+        grouped = _GROUPS.get(tag)
+        if grouped is not None:
+            return grouped
+    return ("centre", "Centre")
+
+
 @dataclass(frozen=True)
 class HeadlineItem:
     title: str
@@ -28,11 +63,14 @@ class HeadlineItem:
     source_name: str
     spectrum_tags: tuple[str, ...] = ()
     spectrum_basis: str = ""
+    group_slug: str = "centre"
+    group_label: str = "Centre"
+    original_title: str = ""
 
 
 @dataclass(frozen=True)
 class FramingNote:
-    """One outlet's framing, derived from spectrum tags (no LLM call)."""
+    """What this article itself says. Not a guess from the publisher's placement."""
 
     outlet: str
     sentence: str
@@ -52,6 +90,14 @@ class StoryBlock:
     differ_line: str
     is_lead: bool = False
     attention_marker: str = ""
+    group_slug: str = "centre"
+    group_label: str = "Centre"
+    group_labels: tuple[str, ...] = ()
+    opinions_differ: bool = False
+    coverage: str = "shared"
+    group_note: str = ""
+    coverage_note: str = ""
+    original_headline: str = ""
 
 
 @dataclass(frozen=True)
@@ -84,6 +130,11 @@ class DigestView:
     validation_status: str | None
     evidence_note: str = "Labels describe how widely something is reported, not whether it is true."
     review_queue: tuple[str, ...] = ()
+    glance_general: str = ""
+    glance_disagreement: str = ""
+    glance_implication: str = ""
+    glance_how: str = ""
+    fetched_label: str = ""
 
 
 def _sources_map(store: Any) -> dict[str, Source]:
@@ -112,6 +163,14 @@ def _story_category(articles: list[Article], sources: dict[str, Source]) -> str:
     return "Germany & politics"
 
 
+def _fetched_label(articles: list[Article]) -> str:
+    times = [article.retrieved_at for article in articles]
+    when = max(times) if times else datetime.now(UTC)
+    local = when.astimezone(BERLIN)
+    clock = f"{local:%A,} {local.day} {local:%B %Y}, {local:%H:%M} Europe/Berlin"
+    return f"Sources last fetched {clock}"
+
+
 def _edition_label(when: datetime) -> str:
     local = when.astimezone(BERLIN)
     return f"{local:%A,} {local.day} {local:%B %Y} · Europe/Berlin"
@@ -124,41 +183,24 @@ def _edition_label_fallback() -> str:
 
 def _headline_item(art: Article, sources: dict[str, Source]) -> HeadlineItem:
     src = sources.get(art.source_id)
+    tags = tuple(src.spectrum_tags) if src else ()
+    slug, label = source_group(art.source_id, tags)
+    shown = english_headline(art.title)
     return HeadlineItem(
-        title=art.title,
+        title=shown,
         url=art.url,
         source_id=art.source_id,
         source_name=src.name if src else art.source_id,
-        spectrum_tags=tuple(src.spectrum_tags) if src else (),
+        spectrum_tags=tags,
         spectrum_basis=src.spectrum_basis if src else "",
+        group_slug=slug,
+        group_label=label,
+        original_title=art.title,
     )
 
 
-def _framing_phrase(tags: tuple[str, ...]) -> str:
-    found = set(tags)
-    if "regional" in found:
-        return "Berlin/local framing"
-    if "centre-left" in found or "center-left" in found:
-        return "social-priority framing"
-    if "centre-right" in found or "center-right" in found:
-        return "centre-right framing"
-    if "centre" in found or "center" in found:
-        return "institutional/mainstream framing"
-    if "left" in found:
-        return "left framing"
-    if "right" in found:
-        return "right framing"
-    if "official" in found:
-        return "an official statement"
-    if "party" in found:
-        return "a party statement"
-    if tags:
-        return f"{tags[0].replace('-', ' ')} framing"
-    return "a general news framing"
-
-
 def _meaning_sentence(item: HeadlineItem) -> str:
-    return f"{item.source_name} reads this with {_framing_phrase(item.spectrum_tags)}."
+    return f"{item.source_name} headline: {item.title}."
 
 
 def _differ_line(items: tuple[HeadlineItem, ...], divergence_text: str) -> str:
@@ -175,6 +217,20 @@ def _differ_line(items: tuple[HeadlineItem, ...], divergence_text: str) -> str:
     return "This story is single-sourced. See how outlets differ in the edition divergence note."
 
 
+def _coverage(origins: int) -> tuple[str, str]:
+    if origins <= 1:
+        return (
+            "unique",
+            "Only one independent origin in this collected sample carried this.",
+        )
+    if origins == 2:
+        return (
+            "few",
+            "Fewer origins than a widely shared story: two in this sample.",
+        )
+    return ("shared", f"{origins} independent origins in this sample.")
+
+
 def _story_block(
     *,
     headline: str,
@@ -184,10 +240,35 @@ def _story_block(
     divergence_text: str,
     attention_marker: str = "",
 ) -> StoryBlock:
+    labels = tuple(dict.fromkeys(item.group_label for item in items))
+    slugs = tuple(dict.fromkeys(item.group_slug for item in items))
+    titles = {item.title for item in items}
+    opinions_differ = len(slugs) > 1 or len(titles) > 1
+    if len(slugs) > 1:
+        group_slug = "mixed"
+        group_label = "Mixed"
+        group_note = (
+            "Opinions differ. Groups in this sample: "
+            f"{', '.join(labels)}. The color marks those groups, not a winner."
+        )
+    elif opinions_differ:
+        group_slug = slugs[0] if slugs else "centre"
+        group_label = labels[0] if labels else "Centre"
+        group_note = "Opinions differ. The headlines do not say the same thing."
+    else:
+        group_slug = slugs[0] if slugs else "centre"
+        group_label = labels[0] if labels else "Centre"
+        group_note = (
+            f"{group_label} is the group on file for this publisher. "
+            "The color is not a score of the article."
+        )
+    origins = int(corroboration) if corroboration else len({item.source_id for item in items})
+    coverage, coverage_note = _coverage(origins)
+    shown = english_headline(headline)
     return StoryBlock(
-        headline=headline,
+        headline=shown,
         category=category,
-        corroboration=corroboration,
+        corroboration=float(origins),
         items=items,
         dek=items[0].title,
         outlet_count=len({item.source_id for item in items}),
@@ -195,13 +276,19 @@ def _story_block(
             FramingNote(outlet=item.source_name, sentence=_meaning_sentence(item)) for item in items
         ),
         differ_line=_differ_line(items, divergence_text),
-        independent_origins=int(corroboration),
+        independent_origins=origins,
         evidence_label=(
-            f"{int(corroboration)} independent origin"
-            if int(corroboration) == 1
-            else f"{int(corroboration)} independent origins"
+            f"{origins} independent origin" if origins == 1 else f"{origins} independent origins"
         ),
         attention_marker=attention_marker,
+        group_slug=group_slug,
+        group_label=group_label,
+        group_labels=labels,
+        opinions_differ=opinions_differ,
+        coverage=coverage,
+        group_note=group_note,
+        coverage_note=coverage_note,
+        original_headline=headline,
     )
 
 
@@ -320,6 +407,12 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
             )
 
     blocks = _mark_lead(blocks)
+    general, disagreement, implication, how = glance_brief(
+        [
+            (block.headline, block.group_label, block.opinions_differ, block.coverage)
+            for block in blocks
+        ]
+    )
 
     by_cat: dict[str, list[StoryBlock]] = defaultdict(list)
     for block in blocks:
@@ -344,6 +437,11 @@ def build_digest_view(store: Any, draft: DigestDraft | None) -> DigestView | Non
         trending=trending,
         validation_status=draft.validation_status,
         review_queue=_review_queue(store),
+        glance_general=general,
+        glance_disagreement=disagreement,
+        glance_implication=implication,
+        glance_how=how,
+        fetched_label=_fetched_label(articles),
     )
 
 
@@ -370,4 +468,5 @@ def build_sources_only_view(store: Any) -> DigestView:
         perspectives=(),
         trending=_build_trending(articles, sources),
         validation_status=None,
+        fetched_label=_fetched_label(articles),
     )

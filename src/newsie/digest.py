@@ -23,6 +23,7 @@ from newsie.domain import (
     Source,
     Story,
 )
+from newsie.events import _sample_line
 from newsie.evidence import LABEL_DISCLAIMER, factual_clusters, omitted_claims, passage_supports
 from newsie.llm import LLMProvider, StubLLMProvider, call_tokens
 from newsie.trends import circulating_topics
@@ -221,11 +222,51 @@ def build_draft_for_stories(
             events.append(
                 PoliticalEvent(
                     title=story.title_hint,
-                    where="Berlin/Germany",
+                    where=story.location or None,
                     citation_urls=[members[0].canonical_url or members[0].url],
                     story_id=story.id,
                 )
             )
+            sentences.append(
+                DigestSentence(
+                    draft_id=draft_id,
+                    story_id=story.id,
+                    section="reporting",
+                    text=_sample_line(members, sources),
+                )
+            )
+        for cluster in story_clusters:
+            if cluster.label == EvidenceLabel.CONTESTED:
+                holder = next(
+                    (
+                        article
+                        for article in members
+                        if cluster.canonical_text in article.body_text()
+                    ),
+                    None,
+                )
+                if holder is None:
+                    continue
+                sentences.append(
+                    DigestSentence(
+                        draft_id=draft_id,
+                        story_id=story.id,
+                        section="differ",
+                        text=f"Accounts differ on: {cluster.canonical_text}",
+                        claim_cluster_id=cluster.id,
+                        citations=[_cite(holder, cluster.canonical_text, None, None)],
+                    )
+                )
+            elif cluster.label == EvidenceLabel.SINGLE_ORIGIN:
+                sentences.append(
+                    DigestSentence(
+                        draft_id=draft_id,
+                        story_id=story.id,
+                        section="unclear",
+                        text=(f"Unverified in this collected sample: {cluster.canonical_text}"),
+                        claim_cluster_id=cluster.id,
+                    )
+                )
         _ = settings
 
     corroborated = [

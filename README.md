@@ -1,6 +1,6 @@
 # newsie
 
-Private, single-user **Berlin & Germany political news digest** agent.
+Private, single-user **event desk** for Berlin and German political news. Articles are evidence about an event. A sentence is kept only when a passage supports it, and a person approves the edition before it is published.
 
 **Topology:** Railway workers ↔ Supabase Postgres (+ pgvector) ↔ Telegram HITL  
 **This repo ships an offline demo** (fixture sources + hash embeddings + stub LLM) so you can run the full spine without API keys.

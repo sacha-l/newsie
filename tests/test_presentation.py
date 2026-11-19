@@ -24,13 +24,17 @@ def test_build_digest_view_has_sections_and_trending() -> None:
     assert len(leads) == 1
     assert leads[0].corroboration == max(card.corroboration for card in cards)
     by_id = {story.id: story for story in store.list_stories()}
-    assert leads[0].headline == by_id[result.draft.story_ids[0]].title_hint
+    assert leads[0].original_headline == by_id[result.draft.story_ids[0]].title_hint
+    assert leads[0].headline != leads[0].original_headline
     for card in cards:
         assert card.items
         assert card.dek
         assert card.meanings
         assert len(card.meanings) == len(card.items)
         assert card.differ_line
+        if len(card.items) == 1:
+            assert card.coverage == "unique"
+            assert card.group_note
         if len(card.items) >= 2:
             assert card.items[0].source_name in card.differ_line
             assert card.items[0].title in card.differ_line
@@ -66,15 +70,20 @@ def test_corroborated_card_has_sources_meaning_and_differ_line() -> None:
     assert card.is_lead
     assert len(card.items) >= 2
     assert card.outlet_count >= 2
-    assert card.dek == left.title
+    assert card.original_headline == left.title
+    assert "Berlin Senate argues" in card.dek
     assert card.meanings
     joined = " ".join(note.sentence for note in card.meanings)
-    assert "Tagesschau" in joined
-    assert "institutional/mainstream framing" in joined
-    assert "rbb" in joined
-    assert "Berlin/local framing" in joined
+    assert "Tagesschau headline:" in joined
+    assert "rbb24 headline:" in joined
+    assert "framing" not in joined
     assert "Tagesschau" in card.differ_line
     assert "rbb" in card.differ_line
-    assert left.title in card.differ_line
-    assert right.title in card.differ_line
+    assert "Berlin Senate argues" in card.differ_line
+    assert "Rent dispute in Berlin" in card.differ_line
     assert "single-sourced" not in card.differ_line
+    assert card.opinions_differ
+    assert card.group_slug == "mixed"
+    assert "Centre" in card.group_labels
+    assert "Regional" in card.group_labels
+    assert card.coverage == "few"

@@ -13,7 +13,9 @@ from fastapi.templating import Jinja2Templates
 
 from newsie.cli import build_demo_pipeline, build_live_pipeline
 from newsie.domain import AdapterKind, Source, Spectrum
+from newsie.events import build_event_board
 from newsie.hitl import HitlError, approve_draft, reject_draft
+from newsie.social_live import fetch_social
 from newsie.web.presentation import build_digest_view, build_sources_only_view
 from newsie.web.session import DemoSession, registry
 
@@ -54,6 +56,7 @@ def _ctx(request: Request, sess: DemoSession, **extra: Any) -> dict[str, Any]:
         "article_count": len(sess.store.list_articles()),
         "sample_banner": sess.mode == "demo",
         "mode": sess.mode,
+        "social": sess.social,
         **extra,
     }
 
@@ -70,11 +73,29 @@ async def home(request: Request) -> HTMLResponse:
     return resp
 
 
+@app.get("/events", response_class=HTMLResponse)
+async def events_page(request: Request) -> HTMLResponse:
+    sess = _session(request)
+    draft = sess.store.get_draft(sess.draft_id) if sess.draft_id else None
+    board = build_event_board(
+        stories=sess.store.list_stories(),
+        articles=sess.store.list_articles(),
+        sources=sess.store.sources,
+        draft=draft,
+    )
+    resp = templates.TemplateResponse(
+        request, "events.html", {**_ctx(request, sess), "board": board}
+    )
+    _set_cookie(resp, sess.id)
+    return resp
+
+
 @app.post("/run", response_class=HTMLResponse)
 async def run_demo(request: Request, mode: str = Form("demo")) -> HTMLResponse:
     sess = _session(request)
     sess.messages = []
     sess.publication_id = None
+    sess.social = None
     sess.mode = "live" if mode == "live" else "demo"
     if sess.mode == "live":
         pipeline, store = build_live_pipeline()
@@ -99,6 +120,21 @@ async def run_demo(request: Request, mode: str = Form("demo")) -> HTMLResponse:
             f"Validation: {result.draft.validation_status}",
             *notes[:8],
         ]
+    resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
+    _set_cookie(resp, sess.id)
+    return resp
+
+
+@app.post("/social", response_class=HTMLResponse)
+async def social_now(request: Request) -> HTMLResponse:
+    sess = _session(request)
+    sess.messages = []
+    if sess.pipeline.kill_switch.engaged:
+        sess.messages = ["Kill switch is on. Social feeds were not fetched."]
+    else:
+        sess.social = fetch_social()
+        count = len(sess.social.topics)
+        sess.messages = [f"Social fetch: {count} trending topics. They are not evidence."]
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
     _set_cookie(resp, sess.id)
     return resp
