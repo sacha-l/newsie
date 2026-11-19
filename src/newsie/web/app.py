@@ -132,20 +132,9 @@ async def social_now(request: Request) -> HTMLResponse:
     if sess.pipeline.kill_switch.engaged:
         sess.messages = ["Kill switch is on. Social feeds were not fetched."]
     else:
-        draft = sess.store.get_draft(sess.draft_id) if sess.draft_id else None
-        edition = (
-            build_digest_view(sess.store, draft)
-            if draft is not None
-            else build_sources_only_view(sess.store)
-        )
-        texts: list[str] = []
-        if edition is not None:
-            for section in edition.sections:
-                for story in section.stories:
-                    texts.extend([story.headline, story.original_headline])
-        sess.social = fetch_social(texts)
-        count = len(sess.social.posts)
-        sess.messages = [f"Social fetch: {count} posts. They are not evidence."]
+        sess.social = fetch_social()
+        count = len(sess.social.topics)
+        sess.messages = [f"Social fetch: {count} trending topics. They are not evidence."]
     resp = templates.TemplateResponse(request, "index.html", _ctx(request, sess))
     _set_cookie(resp, sess.id)
     return resp

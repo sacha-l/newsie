@@ -9,7 +9,7 @@ import html
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote, urlsplit
 from zoneinfo import ZoneInfo
@@ -19,25 +19,14 @@ import httpx
 from newsie.domain import SocialPost
 
 BERLIN = ZoneInfo("Europe/Berlin")
-MAX_CALLS = 4
-_BSKY_HOSTS = ("https://api.bsky.app", "https://public.api.bsky.app")
+MAX_CALLS = 6
+MIN_POSTS = 3
+MAX_TOPICS = 4
+POSTS_PER_TOPIC = 5
 MAX_POSTS = 40
-MAX_SHOWN = 8
-_WINDOWS: tuple[tuple[str, str, int], ...] = (
-    ("hour", "Last hour", 1),
-    ("twelve", "Last 12 hours", 12),
-    ("day", "Last 24 hours", 24),
-)
+_BSKY = "https://api.bsky.app"
 _TEXT = 240
 
-_TAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("ukraine", ("ukraine",)),
-    ("miete", ("miete", "rent", "rents")),
-    ("energie", ("energie", "energy")),
-    ("ki", ("ki", "ai", "copilot")),
-    ("berlin", ("berlin",)),
-    ("politik", ("politik", "senate", "bundestag", "coalition", "koalition")),
-)
 _STOP = frozenset(
     {
         "und",
@@ -71,11 +60,11 @@ _HTML = re.compile(r"<[^>]+>")
 _WORD = re.compile(r"[a-zA-ZäöüÄÖÜß]{4,}")
 
 _HOW = (
-    "On request, Newsie read up to two public Mastodon tag feeds and one public "
-    "Bluesky search for words already on this page. Each feed returns its latest "
-    "40 posts. Last hour, last 12 hours, and last 24 hours are three views of that "
-    "same fetch; posts older than 24 hours are left out. HTML was stripped. No model "
-    "rewrote the posts. These posts do not count toward origins or evidence labels."
+    "On request, Newsie read the public Bluesky trend list and the public Mastodon "
+    "trending tags, then the posts for those topics. A topic is shown only when at "
+    "least 3 posts came back. The Bluesky line is the description that trend list "
+    "sent. The Mastodon line is the words those posts repeat. No model rewrote them. "
+    "These posts do not count toward origins or evidence labels."
 )
 
 
@@ -90,12 +79,12 @@ class SocialCard:
 
 
 @dataclass(frozen=True)
-class SocialWindow:
-    key: str
-    label: str
+class SocialTopic:
+    name: str
     summary: str
+    platform: str
+    count_label: str
     posts: tuple[SocialCard, ...]
-    total: int
 
 
 @dataclass(frozen=True)
@@ -105,21 +94,12 @@ class SocialBrief:
     how: str
     posts: tuple[SocialCard, ...]
     notes: tuple[str, ...]
-    windows: tuple[SocialWindow, ...] = ()
+    topics: tuple[SocialTopic, ...] = ()
 
 
 def stamp(when: datetime) -> str:
     local = when.astimezone(BERLIN)
     return f"{local:%A,} {local.day} {local:%B %Y}, {local:%H:%M} Europe/Berlin"
-
-
-def select_tags(texts: list[str], *, limit: int = 2) -> list[str]:
-    """Pick feed tags from headlines already on the page. Two feeds at most."""
-    blob = " ".join(texts).lower()
-    chosen = [tag for tag, words in _TAGS if any(_has_word(blob, word) for word in words)]
-    if not chosen:
-        chosen = ["politik", "berlin"]
-    return chosen[:limit]
 
 
 def plain_text(raw: str) -> str:
@@ -129,8 +109,16 @@ def plain_text(raw: str) -> str:
     return text[:_TEXT]
 
 
+def feed_uri(link: str) -> str:
+    """Turn a Bluesky trend link into the feed address getFeed expects."""
+    parts = [part for part in link.strip("/").split("/") if part]
+    if len(parts) >= 4 and parts[0] == "profile" and parts[2] == "feed":
+        return f"at://{parts[1]}/app.bsky.feed.generator/{parts[3]}"
+    return ""
+
+
 def posts_from_mastodon(
-    payload: object, *, tag: str, retrieved_at: datetime
+    payload: object, *, tag: str, retrieved_at: datetime, limit: int = MAX_POSTS
 ) -> list[tuple[SocialPost, str]]:
     if not isinstance(payload, list):
         return []
@@ -141,13 +129,13 @@ def posts_from_mastodon(
         item = _mastodon_row(row, tag=tag, retrieved_at=retrieved_at)
         if item is not None:
             found.append(item)
-        if len(found) >= MAX_POSTS:
+        if len(found) >= limit:
             break
     return found
 
 
 def posts_from_bsky(
-    payload: object, *, tag: str, retrieved_at: datetime
+    payload: object, *, tag: str, retrieved_at: datetime, limit: int = MAX_POSTS
 ) -> list[tuple[SocialPost, str]]:
     if not isinstance(payload, dict):
         return []
@@ -161,22 +149,36 @@ def posts_from_bsky(
         item = _bsky_row(row, tag=tag, retrieved_at=retrieved_at)
         if item is not None:
             found.append(item)
-        if len(found) >= MAX_POSTS:
+        if len(found) >= limit:
             break
     return found
 
 
+def posts_from_bsky_feed(
+    payload: object, *, tag: str, retrieved_at: datetime, limit: int = POSTS_PER_TOPIC
+) -> list[tuple[SocialPost, str]]:
+    if not isinstance(payload, dict):
+        return []
+    rows: list[object] = []
+    feed = payload.get("feed")
+    if not isinstance(feed, list):
+        return []
+    for item in feed:
+        post = item.get("post") if isinstance(item, dict) else None
+        if isinstance(post, dict):
+            rows.append(post)
+    return posts_from_bsky({"posts": rows}, tag=tag, retrieved_at=retrieved_at, limit=limit)
+
+
 def fetch_social(
-    texts: list[str],
     *,
     client: httpx.Client | None = None,
     now: datetime | None = None,
 ) -> SocialBrief:
-    """Fetch a bounded set of public posts. Failures stay notes, not exceptions."""
+    """Read trending topics, then the posts for each. Failures stay notes."""
     moment = now or datetime.now(UTC)
-    tags = select_tags(texts)
     notes: list[str] = []
-    rows: list[tuple[SocialPost, str]] = []
+    topics: list[SocialTopic] = []
     owns = client is None
     http = client or httpx.Client(
         timeout=8.0,
@@ -188,100 +190,155 @@ def fetch_social(
     )
     calls = 0
     try:
-        for tag in tags:
-            if calls >= MAX_CALLS:
+        calls += 1
+        trends, note = _get_json(http, f"{_BSKY}/xrpc/app.bsky.unspecced.getTrends?limit=8")
+        if note:
+            notes.append(note)
+        calls += 1
+        tags, tag_note = _get_json(http, "https://mastodon.de/api/v1/trends/tags?limit=8")
+        if tag_note:
+            notes.append(tag_note)
+        for name, summary, feed, count in _bsky_trends(trends)[:2]:
+            if calls >= MAX_CALLS or len(topics) >= MAX_TOPICS:
                 break
-            url = f"https://mastodon.de/api/v1/timelines/tag/{quote(tag)}?limit={MAX_POSTS}"
             calls += 1
-            payload, note = _get_json(http, url)
-            if note:
-                notes.append(note)
-            elif payload is not None:
-                rows.extend(posts_from_mastodon(payload, tag=tag, retrieved_at=moment))
-        if calls < MAX_CALLS:
-            query = quote(" ".join(tags))
-            since = quote((moment - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"))
-            failures: list[str] = []
-            for host in _BSKY_HOSTS:
-                if calls >= MAX_CALLS:
-                    break
-                calls += 1
-                url = (
-                    f"{host}/xrpc/app.bsky.feed.searchPosts"
-                    f"?q={query}&sort=latest&since={since}&limit={MAX_POSTS}"
-                )
-                payload, note = _get_json(http, url)
-                if payload is not None and not note:
-                    rows.extend(posts_from_bsky(payload, tag=" ".join(tags), retrieved_at=moment))
-                    failures.clear()
-                    break
-                if note:
-                    failures.append(note)
-            notes.extend(failures)
+            quoted = quote(feed, safe="")
+            url = f"{_BSKY}/xrpc/app.bsky.feed.getFeed?feed={quoted}&limit={POSTS_PER_TOPIC}"
+            payload, feed_note = _get_json(http, url)
+            if feed_note:
+                notes.append(feed_note)
+                continue
+            topic = _topic_from_posts(
+                name=name,
+                summary=summary,
+                platform="bluesky",
+                count=count,
+                rows=posts_from_bsky_feed(payload, tag=name, retrieved_at=moment),
+            )
+            if topic is not None:
+                topics.append(topic)
+        for name, count in _mastodon_trends(tags)[:2]:
+            if calls >= MAX_CALLS or len(topics) >= MAX_TOPICS:
+                break
+            calls += 1
+            url = f"https://mastodon.de/api/v1/timelines/tag/{quote(name)}?limit={POSTS_PER_TOPIC}"
+            payload, feed_note = _get_json(http, url)
+            if feed_note:
+                notes.append(feed_note)
+                continue
+            rows = posts_from_mastodon(
+                payload, tag=name, retrieved_at=moment, limit=POSTS_PER_TOPIC
+            )
+            topic = _topic_from_posts(
+                name=f"#{name}",
+                summary=_thing_summary(name, [post for post, _url in rows]),
+                platform="mastodon",
+                count=count,
+                rows=rows,
+            )
+            if topic is not None:
+                topics.append(topic)
     finally:
         if owns:
             http.close()
-    return _brief(rows, moment, notes)
+    return _brief(topics, moment, notes)
 
 
-def _brief(rows: list[tuple[SocialPost, str]], when: datetime, notes: list[str]) -> SocialBrief:
-    seen: set[tuple[str, str]] = set()
-    fresh: list[tuple[SocialPost, str, timedelta]] = []
-    moment = _aware(when)
+def _bsky_trends(payload: object) -> list[tuple[str, str, str, int]]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("trends"), list):
+        return []
+    found: list[tuple[str, str, str, int]] = []
+    for row in payload["trends"]:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("displayName") or "").strip()
+        summary = plain_text(str(row.get("description") or ""))
+        feed = feed_uri(str(row.get("link") or ""))
+        count = _as_int(row.get("postCount"))
+        if name and summary and feed and count >= MIN_POSTS:
+            found.append((name, summary, feed, count))
+    return found
+
+
+def _mastodon_trends(payload: object) -> list[tuple[str, int]]:
+    if not isinstance(payload, list):
+        return []
+    found: list[tuple[str, int]] = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").strip()
+        history = row.get("history")
+        uses = _trend_uses(history)
+        if name and uses >= MIN_POSTS:
+            found.append((name, uses))
+    return found
+
+
+def _topic_from_posts(
+    *,
+    name: str,
+    summary: str,
+    platform: str,
+    count: int,
+    rows: list[tuple[SocialPost, str]],
+) -> SocialTopic | None:
+    cards: list[SocialCard] = []
+    seen: set[str] = set()
     for post, url in rows:
-        key = (post.platform, post.external_id)
-        if key in seen:
+        if post.external_id in seen:
             continue
-        seen.add(key)
-        age = moment - _aware(post.retrieved_at)
-        if age < timedelta(0):
-            age = timedelta(0)
-        if age > timedelta(hours=24):
-            continue
-        fresh.append((post, url, age))
-    fresh.sort(key=lambda item: item[2])
-    windows = tuple(_window(key, label, hours, fresh) for key, label, hours in _WINDOWS)
-    day = windows[-1]
+        seen.add(post.external_id)
+        cards.append(_card(post, url))
+        if len(cards) >= POSTS_PER_TOPIC:
+            break
+    if len(cards) < MIN_POSTS:
+        return None
+    shown = len(cards)
+    label = f"{count} posts on this trend. {shown} to read."
+    return SocialTopic(
+        name=name,
+        summary=summary,
+        platform=platform,
+        count_label=label,
+        posts=tuple(cards),
+    )
+
+
+def _thing_summary(name: str, posts: list[SocialPost]) -> str:
+    words = _repeated(posts)
+    if words:
+        return f"People are posting about #{name}. The posts mention {', '.join(words)}."
+    return f"People are posting about #{name}."
+
+
+def _repeated(posts: list[SocialPost]) -> list[str]:
+    counts: Counter[str] = Counter()
+    for post in posts:
+        counts.update(set(_WORD.findall(post.text.lower())) - _STOP)
+    return [word for word, count in counts.most_common(5) if count >= 2]
+
+
+def _brief(topics: list[SocialTopic], when: datetime, notes: list[str]) -> SocialBrief:
+    posts = tuple(post for topic in topics for post in topic.posts)
+    if not topics:
+        summary = (
+            "No trending topic came back with at least 3 posts. Nothing was added to the edition."
+        )
+    else:
+        noun = "topic" if len(topics) == 1 else "topics"
+        summary = (
+            f"{len(topics)} trending {noun}, each with at least 3 posts. "
+            "This is a social signal, not evidence, and it does not change the edition."
+        )
     return SocialBrief(
         fetched_label=stamp(when),
-        summary=_summary([post for post, _url, _age in fresh], windows),
+        summary=summary,
         how=_HOW,
-        posts=day.posts,
+        posts=posts,
         notes=tuple(notes),
-        windows=windows,
+        topics=tuple(topics),
     )
-
-
-def _window(
-    key: str,
-    label: str,
-    hours: int,
-    fresh: list[tuple[SocialPost, str, timedelta]],
-) -> SocialWindow:
-    chosen = [(post, url) for post, url, age in fresh if age <= timedelta(hours=hours)]
-    cards = tuple(_card(post, url) for post, url in _mix_platforms(chosen)[:MAX_SHOWN])
-    return SocialWindow(
-        key=key,
-        label=label,
-        summary=_window_summary(label, [post for post, _url in chosen], shown=len(cards)),
-        posts=cards,
-        total=len(chosen),
-    )
-
-
-def _mix_platforms(
-    chosen: list[tuple[SocialPost, str]],
-) -> list[tuple[SocialPost, str]]:
-    """Alternate platforms so one busy feed does not hide the other."""
-    grouped: dict[str, list[tuple[SocialPost, str]]] = {}
-    for item in chosen:
-        grouped.setdefault(item[0].platform, []).append(item)
-    mixed: list[tuple[SocialPost, str]] = []
-    while len(mixed) < len(chosen):
-        for bucket in grouped.values():
-            if bucket:
-                mixed.append(bucket.pop(0))
-    return mixed
 
 
 def _card(post: SocialPost, url: str) -> SocialCard:
@@ -295,48 +352,13 @@ def _card(post: SocialPost, url: str) -> SocialCard:
     )
 
 
-def _summary(posts: list[SocialPost], windows: tuple[SocialWindow, ...]) -> str:
-    if not posts:
-        return (
-            "No public posts from the last 24 hours came back for this request. "
-            "Nothing was added to the edition."
-        )
-    counts = {window.key: window.total for window in windows}
-    noun = "post" if len(posts) == 1 else "posts"
-    return (
-        f"{len(posts)} {noun} from the last 24 hours. "
-        f"{counts.get('hour', 0)} in the last hour, and "
-        f"{counts.get('twelve', 0)} in the last 12 hours. "
-        "This is a social signal from those feeds, not evidence, and it does not "
-        "change the edition."
+def _trend_uses(history: object) -> int:
+    if not isinstance(history, list):
+        return 0
+    return max(
+        (_as_int(item.get("uses")) for item in history if isinstance(item, dict)),
+        default=0,
     )
-
-
-def _window_summary(label: str, posts: list[SocialPost], *, shown: int) -> str:
-    if not posts:
-        return f"No posts in the {label.lower()} from this fetch."
-    counts = Counter(post.topic for post in posts)
-    bits = ", ".join(f"{tag} {count}" for tag, count in counts.most_common())
-    noun = "post" if len(posts) == 1 else "posts"
-    words: Counter[str] = Counter()
-    for post in posts:
-        for word in _WORD.findall(post.text.lower()):
-            if word not in _STOP:
-                words[word] += 1
-    top = [word for word, count in words.most_common(6) if count > 1]
-    recurring = f" Words that repeat: {', '.join(top)}." if top else ""
-    hidden = f" Showing {shown} of {len(posts)}." if shown < len(posts) else ""
-    return f"{len(posts)} {noun} in the {label.lower()} ({bits}).{recurring}{hidden}"
-
-
-def _aware(when: datetime) -> datetime:
-    if when.tzinfo is None:
-        return when.replace(tzinfo=UTC)
-    return when
-
-
-def _has_word(blob: str, word: str) -> bool:
-    return re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", blob) is not None
 
 
 def _mastodon_row(

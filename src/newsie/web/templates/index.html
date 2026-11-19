@@ -82,37 +82,29 @@
             <form method="post" action="/social">
               <button class="primary" type="submit">Fetch social now</button>
             </form>
-            <p class="how-read">Public Mastodon and Bluesky posts for the words already on this page. A signal, not evidence.</p>
+            <p class="how-read">Trending topics from Bluesky and Mastodon. A topic appears only when at least 3 posts came back. A signal, not evidence.</p>
             {% if social %}
             <p>Social last fetched {{ social.fetched_label }}</p>
             <p>{{ social.summary }}</p>
             <p class="glance-how">{{ social.how }}</p>
-            {% if social.windows %}
-            <div class="social-switch">
-              <nav class="social-views" aria-label="Social time window">
-                {% for window in social.windows %}
-                <a href="#social-{{ window.key }}">{{ window.label }} · {{ window.total }}</a>
+            {% for topic in social.topics %}
+            <article class="social-topic">
+              <h4>{{ topic.name }}</h4>
+              <p class="social-thing">{{ topic.summary }}</p>
+              <p class="social-meta">{{ topic.platform }} · {{ topic.count_label }}</p>
+              <ul class="social-posts">
+                {% for post in topic.posts %}
+                <li class="social-post">
+                  <p class="social-meta">
+                    {% if post.url %}<a href="{{ post.url }}">{{ post.handle }}</a>{% else %}{{ post.handle }}{% endif %}
+                    · {{ post.when_label }}
+                  </p>
+                  <p>{{ post.text }}</p>
+                </li>
                 {% endfor %}
-              </nav>
-              {% for window in social.windows %}
-              <section id="social-{{ window.key }}" class="social-window{% if loop.first %} is-default{% endif %}">
-                <h4>{{ window.label }}</h4>
-                <p>{{ window.summary }}</p>
-                <ul class="social-posts">
-                  {% for post in window.posts %}
-                  <li class="social-post">
-                    <p class="social-meta">
-                      {% if post.url %}<a href="{{ post.url }}">{{ post.handle }}</a>{% else %}{{ post.handle }}{% endif %}
-                      · {{ post.platform }} · {{ post.tag }} · {{ post.when_label }}
-                    </p>
-                    <p>{{ post.text }}</p>
-                  </li>
-                  {% endfor %}
-                </ul>
-              </section>
-              {% endfor %}
-            </div>
-            {% endif %}
+              </ul>
+            </article>
+            {% endfor %}
             {% for note in social.notes %}
             <p class="glance-how">{{ note }}</p>
             {% endfor %}

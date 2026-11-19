@@ -48,7 +48,7 @@ def test_run_html_scans_then_lists_articles() -> None:
 
 
 def test_social_request_renders_a_summary(monkeypatch) -> None:
-    from newsie.social_live import SocialBrief, SocialCard, SocialWindow
+    from newsie.social_live import SocialBrief, SocialCard, SocialTopic
 
     card = SocialCard(
         handle="desk",
@@ -58,31 +58,30 @@ def test_social_request_renders_a_summary(monkeypatch) -> None:
         url="https://mastodon.de/@desk/1",
         tag="berlin",
     )
+    topic = SocialTopic(
+        name="#berlin",
+        summary="People are posting about #berlin. The posts mention rent.",
+        platform="mastodon",
+        count_label="12 posts on this trend. 3 to read.",
+        posts=(card, card, card),
+    )
 
-    def window(key: str, label: str) -> SocialWindow:
-        return SocialWindow(key=key, label=label, summary=label, posts=(card,), total=1)
-
-    def fake(_texts: list[str]) -> SocialBrief:
+    def fake() -> SocialBrief:
         return SocialBrief(
             fetched_label="Tuesday, 17 November 2026, 02:12 Europe/Berlin",
-            summary="1 post from the last 24 hours. This is not evidence.",
-            how="No model rewrote the posts.",
-            posts=(card,),
+            summary="1 trending topic, each with at least 3 posts. This is not evidence.",
+            how="No model rewrote them.",
+            posts=(card, card, card),
             notes=(),
-            windows=(
-                window("hour", "Last hour"),
-                window("twelve", "Last 12 hours"),
-                window("day", "Last 24 hours"),
-            ),
+            topics=(topic,),
         )
 
     monkeypatch.setattr("newsie.web.app.fetch_social", fake)
     page = client.post("/social")
     assert page.status_code == 200
     assert "Social last fetched Tuesday, 17 November 2026, 02:12" in page.text
-    assert "Last hour" in page.text
-    assert "Last 12 hours" in page.text
-    assert "Last 24 hours" in page.text
+    assert "People are posting about #berlin" in page.text
+    assert "3 to read" in page.text
     assert "Berlin rent argument" in page.text
     assert "not evidence" in page.text
     assert "Sources last fetched" in page.text
